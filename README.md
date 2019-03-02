@@ -8,7 +8,7 @@ the direction ircd-seven was headed.
 some of the coding from ChatIRCd has been used on aspIRCd. Credit to Ben (www.chatlounge.net)
 
 **sIRCd**
-Coding from ChatIRCd has been used on aspIRCd. Credit to Craigory (www.baconrashers.net)
+Coding from sIRCd has been used on aspIRCd. Credit to Craigory (www.baconrashers.net)
 
 ## Supported Platforms
 

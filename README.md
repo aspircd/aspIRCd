@@ -7,6 +7,9 @@ the direction ircd-seven was headed.
 **ChatIRCd**
 some of the coding from ChatIRCd has been used on aspIRCd. Credit to Ben (www.chatlounge.net)
 
+**sIRCd**
+Coding from ChatIRCd has been used on aspIRCd. Credit to Craigory (www.baconrashers.net)
+
 ## Supported Platforms
 
 All modern \*NIX systems should work. You need the equivalent of the following

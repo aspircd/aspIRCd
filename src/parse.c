@@ -45,6 +45,7 @@
 
 static struct Dictionary *cmd_dict = NULL;
 struct Dictionary *alias_dict = NULL;
+struct Dictionary *fakechannel_dict = NULL;
 
 /* parv[0] is not used, and parv[LAST] == NULL */
 static char *para[MAXPARA + 2];
@@ -669,7 +670,6 @@ do_numeric(char numeric[], struct Client *client_p, struct Client *source_p, int
 				     numeric, chptr->chname, buffer);
 }
 
-
 static void do_alias(struct alias_entry *aptr, struct Client *source_p, char *text)
 {
 	char *p;
@@ -702,14 +702,11 @@ static void do_alias(struct alias_entry *aptr, struct Client *source_p, char *te
 
 	if (text != NULL && *text == ':')
 		text++;
-	if ((text == NULL || *text == '\0') && strlen(aptr->prefix) == 0)
+	if (text == NULL || *text == '\0')
 	{
 		sendto_one(source_p, form_str(ERR_NOTEXTTOSEND), me.name, source_p->name);
 		return;
 	}
-
-	char sendtex[511-18-14]; // needed...
-	snprintf(sendtex, 510-18-14, "%s%s%s", aptr->prefix, (strlen(aptr->prefix) == 0) ? "" : " ", (text == NULL || *text == '\0') ? "" : text);
 
 	/* increment the hitcounter on this alias */
 	aptr->hits++;
@@ -717,7 +714,7 @@ static void do_alias(struct alias_entry *aptr, struct Client *source_p, char *te
 	sendto_one(target_p, ":%s PRIVMSG %s :%s",
 			get_id(source_p, target_p),
 			p != NULL ? aptr->target : get_id(target_p, target_p),
-			sendtex);
+			text);
 }
 
 int

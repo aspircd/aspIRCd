@@ -422,8 +422,8 @@ sendto_server(struct Client *one, struct Channel *chptr, unsigned long caps,
 	if(rb_dlink_list_length(&serv_list) == 0)
 		return;
 
-	if(chptr != NULL && ChannelIsLocal(chptr->chname))
-		return;
+	if(chptr != NULL && *chptr->chname != '#')
+			return;
 
 	rb_linebuf_newbuf(&linebuf);
 	va_start(args, format);
@@ -822,8 +822,6 @@ sendto_common_channels_local(struct Client *user, int cap, int negcap, const cha
 			   !NotCapable(target_p, negcap))
 				continue;
 
-			if(is_delayed(msptr)) continue;
-
 			target_p->serial = current_serial;
 			send_linebuf(target_p, &linebuf);
 		}
@@ -887,8 +885,6 @@ sendto_common_channels_local_butone(struct Client *user, int cap, int negcap, co
 			   !IsCapable(target_p, cap) ||
 			   !NotCapable(target_p, negcap))
 				continue;
-
-			if(is_delayed(msptr)) continue;
 
 			target_p->serial = current_serial;
 			send_linebuf(target_p, &linebuf);
@@ -1168,7 +1164,7 @@ sendto_realops_snomask(int flags, int level, const char *pattern, ...)
 		rb_vsnprintf(buf, sizeof(buf), pattern, args);
 		va_end(args);
 		rb_linebuf_putmsg(&linebuf, pattern, NULL,
-				":%s NOTICE * :(\x02Notice\x02) %s", me.name, buf);
+				":%s NOTICE * :*** Notice -- %s", me.name, buf);
 		snobuf = construct_snobuf(flags);
 		if (snobuf[1] != '\0')
 			sendto_server(NULL, NULL, CAP_ENCAP|CAP_TS6, NOCAPS,
@@ -1182,14 +1178,14 @@ sendto_realops_snomask(int flags, int level, const char *pattern, ...)
 		rb_vsnprintf(buf, sizeof(buf), pattern, args);
 		va_end(args);
 		rb_linebuf_putmsg(&linebuf, pattern, NULL,
-				":%s NOTICE * :(\x02Notice\x02) %s", me.name, buf);
-		sendto_one_notice(remote_rehash_oper_p, ":(\x02Notice\x02) %s", buf);
+				":%s NOTICE * :*** Notice -- %s", me.name, buf);
+		sendto_one_notice(remote_rehash_oper_p, ":*** Notice -- %s", buf);
 	}
 	else
 	{
 		va_start(args, pattern);
 		rb_linebuf_putmsg(&linebuf, pattern, &args,
-				":%s NOTICE * :(\x02Notice\x02) ", me.name);
+				":%s NOTICE * :*** Notice -- ", me.name);
 		va_end(args);
 	}
 	level &= ~L_NETWIDE;
@@ -1231,7 +1227,7 @@ sendto_realops_snomask_from(int flags, int level, struct Client *source_p,
 
 	va_start(args, pattern);
 	rb_linebuf_putmsg(&linebuf, pattern, &args,
-		       ":%s NOTICE * :(\x02Notice\x02) ", source_p->name);
+		       ":%s NOTICE * :*** Notice -- ", source_p->name);
 	va_end(args);
 
 	RB_DLINK_FOREACH_SAFE(ptr, next_ptr, local_oper_list.head)

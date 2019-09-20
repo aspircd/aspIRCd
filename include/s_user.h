@@ -52,7 +52,6 @@ extern void change_nick_user_host(struct Client *target_p, const char *nick, con
 				  AFP(6, 7);
 
 extern int user_modes[256];
-extern char * user_mode_names[256];
 extern unsigned int find_umode_slot(void);
 extern void construct_umodebuf(void);
 

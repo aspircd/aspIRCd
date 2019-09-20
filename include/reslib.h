@@ -31,7 +31,6 @@
 #define T_AAAA 28
 #define T_PTR 12
 #define T_CNAME 5
-#define T_TXT 16
 #define T_NULL 10
 #define C_IN 1
 #define QFIXEDSZ 4

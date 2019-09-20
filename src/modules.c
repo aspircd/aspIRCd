@@ -51,16 +51,13 @@ static const char *core_module_table[] = {
 	"m_join",
 	"m_kick",
 	"m_kill",
-
 	"m_message",
 	"m_mode",
 	"m_nick",
 	"m_part",
 	"m_quit",
-
 	"m_server",
 	"m_squit",
-	"m_metadata",
 	NULL
 };
 

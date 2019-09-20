@@ -47,10 +47,7 @@ struct Class
 	int cidr_ipv4_bitlen;
 	int cidr_ipv6_bitlen;
 	int cidr_amount;
-	int flood_multiplier; // should be 16 for normal blocks
-	// 4 for privileged
-	// 32 for disfavoured
-	// choose your poison
+
 };
 
 extern rb_dlink_list class_list;
@@ -70,7 +67,6 @@ extern struct Class *default_class;
 #define CidrIpv6Bitlen(x)   ((x)->cidr_ipv6_bitlen)
 #define CidrAmount(x)	((x)->cidr_amount)
 #define ClassPtr(x)      ((x)->c_class)
-#define FloodMultiplier(x)	((x)->flood_multiplier)
 
 #define ConfClassName(x) (ClassPtr(x)->class_name)
 #define ConfConFreq(x)   (ClassPtr(x)->con_freq)
@@ -85,7 +81,6 @@ extern struct Class *default_class;
 #define ConfCidrAmount(x) (ClassPtr(x)->cidr_amount)
 #define ConfCidrIpv4Bitlen(x) (ClassPtr(x)->cidr_ipv4_bitlen)
 #define ConfCidrIpv6Bitlen(x) (ClassPtr(x)->cidr_ipv6_bitlen)
-#define ConfFloodMultiplier(x)	(ClassPtr(x)->flood_multiplier)
 
 void add_class(struct Class *);
 

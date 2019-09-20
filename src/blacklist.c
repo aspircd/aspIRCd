@@ -40,13 +40,12 @@
 #include "s_conf.h"
 #include "s_user.h"
 #include "blacklist.h"
-#include "substitution.h"
 #include "send.h"
 
 rb_dlink_list blacklist_list = { NULL, NULL, 0 };
 
 /* private interfaces */
-static struct Blacklist *find_blacklist(char *name, int rejecting)
+static struct Blacklist *find_blacklist(char *name)
 {
 	rb_dlink_node *nptr;
 
@@ -54,7 +53,7 @@ static struct Blacklist *find_blacklist(char *name, int rejecting)
 	{
 		struct Blacklist *blptr = (struct Blacklist *) nptr->data;
 
-		if (!irccmp(blptr->host, name) && blptr->reject == rejecting)
+		if (!irccmp(blptr->host, name))
 			return blptr;
 	}
 
@@ -76,13 +75,11 @@ static inline int blacklist_check_reply(struct BlacklistClient *blcptr, struct r
 			memcmp(&((struct sockaddr_in *)addr)->sin_addr, "\177", 1))
 		goto blwarn;
 
-	rb_inet_ntop_sock((struct sockaddr *)addr, ipaddr, sizeof(ipaddr));
-
-	blcptr->replycode = rb_strdup(ipaddr);
-
 	/* No filters and entry found - thus positive match */
 	if (!rb_dlink_list_length(&blptr->filters))
 		return 1;
+
+	rb_inet_ntop_sock((struct sockaddr *)addr, ipaddr, sizeof(ipaddr));
 
 	/* Below will prolly have to change too if the above changes */
 	if ((lastoctet = strrchr(ipaddr, '.')) == NULL || *(++lastoctet) == '\0')
@@ -104,7 +101,7 @@ static inline int blacklist_check_reply(struct BlacklistClient *blcptr, struct r
 			continue;
 		}
 
-		if (!irccmp(filter->filterstr, cmpstr))
+		if (strcmp(cmpstr, filter->filterstr) == 0)
 			/* Match! */
 			return 1;
 	}
@@ -131,8 +128,8 @@ static void blacklist_dns_callback(void *vptr, struct DNSReply *reply)
 
 	if (blcptr->client_p->preClient == NULL)
 	{
-//		sendto_realops_snomask(SNO_GENERAL, L_ALL,
-//				"blacklist_dns_callback(): blcptr->client_p->preClient (%s) is NULL", get_client_name(blcptr->client_p, HIDE_IP));
+		sendto_realops_snomask(SNO_GENERAL, L_ALL,
+				"blacklist_dns_callback(): blcptr->client_p->preClient (%s) is NULL", get_client_name(blcptr->client_p, HIDE_IP));
 		rb_free(blcptr);
 		return;
 	}
@@ -144,36 +141,10 @@ static void blacklist_dns_callback(void *vptr, struct DNSReply *reply)
 	}
 
 	/* they have a blacklist entry for this client */
-	if (listed && blcptr->client_p->preClient->dnsbl_listed == NULL && blcptr->blacklist->reject == 1)
+	if (listed && blcptr->client_p->preClient->dnsbl_listed == NULL)
 	{
 		blcptr->client_p->preClient->dnsbl_listed = blcptr->blacklist;
 		/* reference to blacklist moves from blcptr to client_p->preClient... */
-	} else if (listed && blcptr->client_p->preClient->dnsbl_listed == NULL && blcptr->blacklist->reject == 0 && 0 != strlen( blcptr->blacklist->mark )) {
-		char marknam [NICKLEN+7];
-		rb_snprintf(marknam, NICKLEN+7, "DNSBL:%s", blcptr->blacklist->mark);
-		sendto_one(blcptr->client_p, ":%s NOTICE * :Your IP address is listed in the DNSBL %s,"
-		" with listing type %s.", me.name, blcptr->blacklist->host, blcptr->replycode);
-		sendto_one(blcptr->client_p, ":%s NOTICE * :You now carry the mark %s.", me.name, blcptr->blacklist->mark);
-		sendto_realops_snomask(SNO_REJ, L_NETWIDE,
-			"Listed on DNS greylist %s (type %s): %s (%s@%s) [%s] [%s]",
-			blcptr->blacklist->host, blcptr->replycode,
-			blcptr->client_p->name,
-			blcptr->client_p->username, blcptr->client_p->host,
-			IsIPSpoof(blcptr->client_p) ? "255.255.255.255" : blcptr->client_p->sockhost,
-			blcptr->client_p->info);
-
-		rb_dlink_list varlist = { NULL, NULL, 0 };
-		// nick ip host dnsbl-host network-name listing-type
-		substitution_append_var(&varlist, "nick", blcptr->client_p->name);
-		substitution_append_var(&varlist, "ip", blcptr->client_p->sockhost);
-		substitution_append_var(&varlist, "host", blcptr->client_p->host);
-		substitution_append_var(&varlist, "dnsbl-host", blcptr->blacklist->host);
-		substitution_append_var(&varlist, "network-name", ServerInfo.network_name);
-		substitution_append_var(&varlist, "listing-type", blcptr->replycode);
-		sendto_one(blcptr->client_p, ":%s NOTICE * :%s", me.name, substitution_parse(blcptr->blacklist->reject_reason, &varlist));
-		user_metadata_add(blcptr->client_p, marknam, substitution_parse(blcptr->blacklist->reject_reason, &varlist), 0);
-		substitution_free(&varlist);
-		unref_blacklist(blcptr->blacklist);
 	}
 	else
 		unref_blacklist(blcptr->blacklist);
@@ -249,33 +220,32 @@ static void initiate_blacklist_dnsquery(struct Blacklist *blptr, struct Client *
 		return;
 
 	gethost_byname_type(buf, &blcptr->dns_query, T_A);
-//	gethost_byname_type(buf, &blcptr->dns_query, T_TXT);
 
 	rb_dlinkAdd(blcptr, &blcptr->node, &client_p->preClient->dnsbl_queries);
 	blptr->refcount++;
 }
 
 /* public interfaces */
-struct Blacklist *new_blacklist(char *name, char *reject_reason, int ipv4, int ipv6, rb_dlink_list *filters, int reject, char *mark)
+struct Blacklist *new_blacklist(char *name, char *reject_reason, int ipv4, int ipv6, rb_dlink_list *filters)
 {
 	struct Blacklist *blptr;
 
 	if (name == NULL || reject_reason == NULL)
 		return NULL;
 
-	//blptr = find_blacklist(name, reject);
-	// people want multiple blacklist entries per host.
-	// don't bother dewasting the illegals.
-	blptr = rb_malloc(sizeof(struct Blacklist));
-	rb_dlinkAddAlloc(blptr, &blacklist_list);
+	blptr = find_blacklist(name);
+	if (blptr == NULL)
+	{
+		blptr = rb_malloc(sizeof(struct Blacklist));
+		rb_dlinkAddAlloc(blptr, &blacklist_list);
+	}
+	else
+		blptr->status &= ~CONF_ILLEGAL;
 
 	rb_strlcpy(blptr->host, name, IRCD_RES_HOSTLEN + 1);
-	if (mark != NULL) rb_strlcpy(blptr->mark, mark, NICKLEN + 1);
-	else rb_strlcpy(blptr->mark, "", NICKLEN+1);
 	rb_strlcpy(blptr->reject_reason, reject_reason, IRCD_BUFSIZE);
 	blptr->ipv4 = ipv4;
 	blptr->ipv6 = ipv6;
-	blptr->reject = reject;
 
 	rb_dlinkMoveList(filters, &blptr->filters);
 

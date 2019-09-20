@@ -108,7 +108,7 @@ m_remove(struct Client *client_p, struct Client *source_p, int parc, const char 
 			return 0;
 		}
 
-		if(0==(get_channel_access(source_p, msptr, MODE_ADD) & (ONLY_CHANOPS|CHFL_HALFOP)))
+		if(get_channel_access(source_p, msptr, MODE_ADD) < CHFL_CHANOP)
 		{
 			if(MyConnect(source_p))
 			{
@@ -197,11 +197,7 @@ m_remove(struct Client *client_p, struct Client *source_p, int parc, const char 
 		 * - Personally, flame and I believe that server kicks shouldn't
 		 *   be sent anyways.  Just waiting for some oper to abuse it...
 		 */
-		if (!is_delayed(who)) sendto_channel_local(ALL_MEMBERS, chptr,
-				     ":%s!%s@%s PART %s :requested by %s (%s)",
-				     who->name, who->username,
-				     who->host, name, source_p->name, comment);
-		else sendto_one(who,
+		sendto_channel_local(ALL_MEMBERS, chptr,
 				     ":%s!%s@%s PART %s :requested by %s (%s)",
 				     who->name, who->username,
 				     who->host, name, source_p->name, comment);

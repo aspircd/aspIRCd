@@ -68,7 +68,6 @@ struct ConfItem
 	char *passwd;		/* doubles as kline reason *ugh* */
 	char *spasswd;		/* Password to send. */
 	char *user;		/* user part of user@host */
-	char *webircname;	// webirc support
 	int port;
 	time_t hold;		/* Hold action until this time (calendar time) */
 	time_t created;		/* Creation time (for klines etc) */
@@ -113,9 +112,6 @@ struct ConfItem
 #define CONF_FLAGS_NEED_SASL		0x00040000
 #define CONF_FLAGS_ENCRYPTED            0x00200000
 #define CONF_FLAGS_EXEMPTDNSBL		0x04000000
-#define CONF_FLAGS_SPOOF_WEBCHAT	0x08000000	// will be a webirc client once we're done
-		// with her
-#define CONF_FLAGS_USE_USER_IDENT	0x10000000	// use user ident
 
 
 /* Macros for struct ConfItem */
@@ -132,12 +128,10 @@ struct ConfItem
 #define IsConfExemptJupe(x)	((x)->flags & CONF_FLAGS_EXEMPTJUPE)
 #define IsConfExemptResv(x)	((x)->flags & CONF_FLAGS_EXEMPTRESV)
 #define IsConfDoSpoofIp(x)      ((x)->flags & CONF_FLAGS_SPOOF_IP)
-#define IsConfDoSpoofWebchat(x) ((x)->flags & CONF_FLAGS_SPOOF_WEBCHAT)
 #define IsConfSpoofNotice(x)    ((x)->flags & CONF_FLAGS_SPOOF_NOTICE)
 #define IsConfEncrypted(x)      ((x)->flags & CONF_FLAGS_ENCRYPTED)
 #define IsNeedSasl(x)		((x)->flags & CONF_FLAGS_NEED_SASL)
 #define IsConfExemptDNSBL(x)	((x)->flags & CONF_FLAGS_EXEMPTDNSBL)
-#define IsConfUseUserIdent(x)	((x)->flags & CONF_FLAGS_USE_USER_IDENT)
 #define IsConfSSLNeeded(x)	((x)->flags & CONF_FLAGS_NEED_SSL)
 
 /* flag definitions for opers now in client.h */
@@ -197,6 +191,7 @@ struct config_file_entry
 	int operspy_admin_only;
 	int pace_wait;
 	int pace_wait_simple;
+	int listfake_wait;
 	int short_motd;
 	int no_oper_flood;
 	int hide_server;
@@ -241,12 +236,10 @@ struct config_file_entry
 
 	unsigned int nicklen;
 	int certfp_method;
-	int hide_certfp;
 };
 
 struct config_channel_entry
 {
-	int use_quiet;
 	int use_except;
 	int use_invex;
 	int use_forward;
@@ -267,19 +260,7 @@ struct config_channel_entry
 	int channel_target_change;
 	int disable_local_channels;
 	unsigned int autochanmodes;
-	unsigned int modelessmodes;
 	int displayed_usercount;
-	char *chnampfxglobal;
-	char *chnampfxlocal;
-	char *chnampfxmodeless;
-	char *chnampfx;
-
-	char *halfopscannotuse;
-
-	char *operprefix;
-	char *qprefix;
-	char *aprefix;
-	char *hprefix;
 };
 
 struct config_server_hide
@@ -296,7 +277,6 @@ struct server_info
 	char sid[4];
 	char *description;
 	char *network_name;
-	char *network_desc;
 	int hub;
 	struct sockaddr_in ip;
 	int default_max_clients;
@@ -326,10 +306,19 @@ struct alias_entry
 {
 	char *name;
 	char *target;
-	char *prefix;
 	int flags;			/* reserved for later use */
 	int hits;
 };
+
+struct fakechannel_entry
+{
+	char *name;
+	char *topic;
+
+	int users_min;
+	int users_max;
+};
+
 
 /* All variables are GLOBAL */
 extern int specific_ipv4_vhost;	/* used in s_bsd.c */

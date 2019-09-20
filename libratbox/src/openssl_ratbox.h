@@ -87,7 +87,6 @@
 #  endif
 #endif
 
-
 #if !defined(LIBRESSL_VERSION_NUMBER) && (OPENSSL_VERSION_NUMBER > 0x10101000L)
 #  define LRB_HAVE_TLS_ECDH_X25519      1
 #else
@@ -136,7 +135,7 @@ static const char rb_default_ciphers[] = ""
 static char rb_default_curves[] = "X25519:P-521:P-384:P-256";
 #  else
 static char rb_default_curves[] = "P-521:P-384:P-256";
-#endif
+#  endif
 #endif
 
 #endif /* LRB_OPENSSL_H_INC */

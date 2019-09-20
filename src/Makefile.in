@@ -79,7 +79,6 @@ SRCS =                          \
   logger.c                      \
   match.c                       \
   modules.c                     \
-  messages.c                    \
   monitor.c			\
   newconf.c			\
   operhash.c                    \

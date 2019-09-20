@@ -15,6 +15,7 @@
  *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
  *  USA
  *
+ * $Id: ircd_lexer.l 3540 2007-07-30 17:26:00Z jilles $
  */
 
 %option case-insensitive
@@ -25,6 +26,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <netinet/in.h>
+
 #include <string.h>
 #include <errno.h>
 #include <limits.h>
@@ -32,10 +35,9 @@
 #define WE_ARE_MEMORY_C
 
 #include "stdinc.h"
+#include "ircd_defs.h"
 #include "common.h"
 #include "config.h"
-#include "ircd_defs.h"
-#include "defaults.h"
 #include "logger.h"
 #include "s_conf.h"
 #include "newconf.h"
@@ -68,18 +70,15 @@ char yy_linebuf[16384];
 
 #define YY_INPUT(buf,result,max_size) \
   if (!(result = conf_fgets(buf, max_size, conf_fbfile_in))) \
-    YY_FATAL_ERROR("input in flex scanner failed");
+    YY_FATAL_ERROR("input in flex scanner failed"); 
 %}
 
 ws        [ \t]*
 digit     [0-9]
 comment   #.*
-ppcomment \/\/.*
 qstring   \"[^\"\n]*[\"\n]
-string    [a-zA-Z_\~\:\-][a-zA-Z0-9_\:\-]*
+string    [a-zA-Z_\~\:][a-zA-Z0-9_\:]*
 include   \.include{ws}(\<.*\>|\".*\")
-optional_equals [ =]+
-optional_comma [ ,]?
 
 %%
 {include}       { cinclude(); }
@@ -88,7 +87,6 @@ optional_comma [ ,]?
 
 {ws}            ;
 {comment}       { hashcomment(); }
-{ppcomment}     { hashcomment(); }
 
 {digit}+        { yylval.number = atoi(yytext); return NUMBER; }
 
@@ -107,9 +105,9 @@ optional_comma [ ,]?
                         {
                           int i,j;
                           yylval.string[yyleng-2] = '\0'; /* remove close
-                                                           *  quote
+                                                           *  quote 
                                                            */
-
+                          
                           for (j=i=0 ;yylval.string[i] != '\0'; i++,j++)
                             {
                               if (yylval.string[i] != '\\')
@@ -119,7 +117,7 @@ optional_comma [ ,]?
                               else
                                 {
                                   i++;
-                                  if (yylval.string[i] == '\0') /* XXX
+                                  if (yylval.string[i] == '\0') /* XXX 
                                                                  * should not
                                                                  * happen
                                                                  */
@@ -139,15 +137,13 @@ optional_comma [ ,]?
 
 
 loadmodule	{ return LOADMODULE; }
-{string}        {
+{string}        { 
 		  rb_strlcpy(yylval.string, yytext, 1024);
                   yylval.string[yyleng] = '\0';
                   return STRING;
                 }
 
 \.\.		{ return TWODOTS; }
-\-\>		{ return TWODOTS; }
-\-\-		{ return TWODOTS; }
 .               { return yytext[0]; }
 <<EOF>>         { if (ieof()) yyterminate(); }
 %%
@@ -156,7 +152,7 @@ loadmodule	{ return LOADMODULE; }
 void ccomment()
 {
   int c;
-
+  
   /* log(L_NOTICE, "got comment"); */
   while (1)
     {
@@ -165,7 +161,7 @@ void ccomment()
       if (c == '*')
         {
           while ((c = input()) == '*');
-          if (c == '/')
+          if (c == '/') 
             break;
           if (c == '\n') ++lineno;
         }
@@ -190,18 +186,18 @@ void cinclude(void)
   else
     *strchr(++c, '>') = 0;
 
-  /* do stacking and co. */
+  /* do stacking and co. */ 
   if (include_stack_ptr >= MAX_INCLUDE_DEPTH)
     conf_report_error("Includes nested too deep (max is %d)", MAX_INCLUDE_DEPTH);
   else
   {
     FILE *tmp_fbfile_in;
-
+    
     tmp_fbfile_in = fopen(c, "r");
-
+    
     if (tmp_fbfile_in == NULL)
     {
-      /* if its not found in PREFIX, look in IRCD_PATH_ETC */
+      /* if its not found in PREFIX, look in ETCPATH */
       char fnamebuf[IRCD_BUFSIZE];
 
       snprintf(fnamebuf, sizeof(fnamebuf), "%s/%s", ETCPATH, c);

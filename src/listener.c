@@ -151,9 +151,7 @@ show_ports(struct Client *source_p)
 			   get_listener_port(listener),
 			   IsOperAdmin(source_p) ? listener->name : me.name,
 			   listener->ref_count, (listener->active) ? "active" : "disabled",
-			   listener->ssl ? " ssl" : "",
-			   listener->sctp ? " sctp" : ""
-			);
+			   listener->ssl ? " ssl" : "");
 	}
 }
 
@@ -181,7 +179,7 @@ inetport(struct Listener *listener)
 	 * At first, open a new socket
 	 */
 
-	F = rb_socket(GET_SS_FAMILY(&listener->addr), SOCK_STREAM, IPPROTO_TCP, "Listener socket");
+	F = rb_socket(GET_SS_FAMILY(&listener->addr), SOCK_STREAM, 0, "Listener socket");
 
 #ifdef RB_IPV6
 	if(listener->addr.ss_family == AF_INET6)
@@ -273,122 +271,10 @@ inetport(struct Listener *listener)
 
 	rb_accept_tcp(listener->F, accept_precallback, accept_callback, listener);
 	return 1;
-}
-
-static int
-inetport_sctp(struct Listener *listener)
-{
-	rb_fde_t *F;
-	int opt = 1;
-	const char *errstr;
-
-	/*
-	 * At first, open a new socket
-	 */
-
-#ifndef IPPROTO_SCTP
-	sendto_realops_snomask(SNO_GENERAL, L_ALL,
-			"SCTP is NOT supported! Please delete the sctpport and sctpsslport lines from your config file. This is not an error; the IRCd will continue to function.");
-	return 0;
-#else
-
-	F = rb_socket(GET_SS_FAMILY(&listener->addr), SOCK_STREAM, IPPROTO_SCTP, "Listener socket");
-
-#ifdef RB_IPV6
-	if(listener->addr.ss_family == AF_INET6)
-	{
-		struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)&listener->addr;
-		if(!IN6_ARE_ADDR_EQUAL(&in6->sin6_addr, &in6addr_any))
-		{
-			rb_inet_ntop(AF_INET6, &in6->sin6_addr, listener->vhost, sizeof(listener->vhost));
-			listener->name = listener->vhost;
-		}
-	} else
-#endif
-	{
-		struct sockaddr_in *in = (struct sockaddr_in *)&listener->addr;
-		if(in->sin_addr.s_addr != INADDR_ANY)
-		{
-			rb_inet_ntop(AF_INET, &in->sin_addr, listener->vhost, sizeof(listener->vhost));
-			listener->name = listener->vhost;
-		}
-	}
-
-	if(F == NULL)
-	{
-		sendto_realops_snomask(SNO_GENERAL, L_ALL,
-				"Cannot open socket for listener on port %d",
-				get_listener_port(listener));
-		ilog(L_MAIN, "Cannot open socket for listener %s",
-				get_listener_name(listener));
-		return 0;
-	}
-	else if((maxconnections - 10) < rb_get_fd(F)) /* XXX this is kinda bogus*/
-	{
-		ilog_error("no more connections left for listener");
-		sendto_realops_snomask(SNO_GENERAL, L_ALL,
-				"No more connections left for listener on port %d",
-				get_listener_port(listener));
-		ilog(L_MAIN, "No more connections left for listener %s",
-				get_listener_name(listener));
-		rb_close(F);
-		return 0;
-	}
-
-	/*
-	 * XXX - we don't want to do all this crap for a listener
-	 * set_sock_opts(listener);
-	 */
-	if(setsockopt(rb_get_fd(F), SOL_SOCKET, SO_REUSEADDR, (char *) &opt, sizeof(opt)))
-	{
-		errstr = strerror(rb_get_sockerr(F));
-		sendto_realops_snomask(SNO_GENERAL, L_ALL,
-				"Cannot set SO_REUSEADDR for listener on port %d: %s",
-				get_listener_port(listener), errstr);
-		ilog(L_MAIN, "Cannot set SO_REUSEADDR for listener %s: %s",
-				get_listener_name(listener), errstr);
-		rb_close(F);
-		return 0;
-	}
-
-	/*
-	 * Bind a port to listen for new connections if port is non-null,
-	 * else assume it is already open and try get something from it.
-	 */
-
-	if(bind(rb_get_fd(F), (struct sockaddr *) &listener->addr, GET_SS_LEN(&listener->addr)))
-	{
-		errstr = strerror(rb_get_sockerr(F));
-		sendto_realops_snomask(SNO_GENERAL, L_ALL,
-				"Cannot bind for listener on port %d: %s",
-				get_listener_port(listener), errstr);
-		ilog(L_MAIN, "Cannot bind for listener %s: %s",
-				get_listener_name(listener), errstr);
-		rb_close(F);
-		return 0;
-	}
-
-	if(rb_listen(F, RATBOX_SOMAXCONN, listener->defer_accept))
-	{
-		errstr = strerror(rb_get_sockerr(F));
-		sendto_realops_snomask(SNO_GENERAL, L_ALL,
-				"Cannot listen() for listener on port %d: %s",
-				get_listener_port(listener), errstr);
-		ilog(L_MAIN, "Cannot listen() for listener %s: %s",
-				get_listener_name(listener), errstr);
-		rb_close(F);
-		return 0;
-	}
-
-	listener->F = F;
-
-	rb_accept_tcp(listener->F, accept_precallback, accept_callback, listener);
-	return 1;
-#endif
 }
 
 static struct Listener *
-find_listener(struct rb_sockaddr_storage *addr, int sctp)
+find_listener(struct rb_sockaddr_storage *addr)
 {
 	struct Listener *listener = NULL;
 	struct Listener *last_closed = NULL;
@@ -397,9 +283,6 @@ find_listener(struct rb_sockaddr_storage *addr, int sctp)
 	{
 		if(addr->ss_family != listener->addr.ss_family)
 			continue;
-
-		if (!!sctp && !!!(listener->sctp)) continue;
-		if (!!!sctp && !!(listener->sctp)) continue;
 
 		switch(addr->ss_family)
 		{
@@ -450,7 +333,7 @@ find_listener(struct rb_sockaddr_storage *addr, int sctp)
  * the format "255.255.255.255"
  */
 void
-add_listener(int port, const char *vhost_ip, int family, int ssl, int defer_accept, int sctp)
+add_listener(int port, const char *vhost_ip, int family, int ssl, int defer_accept)
 {
 	struct Listener *listener;
 	struct rb_sockaddr_storage vaddr;
@@ -509,7 +392,7 @@ add_listener(int port, const char *vhost_ip, int family, int ssl, int defer_acce
 		default:
 			break;
 	}
-	if((listener = find_listener(&vaddr, sctp)))
+	if((listener = find_listener(&vaddr)))
 	{
 		if(listener->F != NULL)
 			return;
@@ -523,26 +406,12 @@ add_listener(int port, const char *vhost_ip, int family, int ssl, int defer_acce
 
 	listener->F = NULL;
 	listener->ssl = ssl;
-	listener->sctp = sctp;
 	listener->defer_accept = defer_accept;
 
-	if(sctp) {
-#ifdef IPPROTO_SCTP
-		if(inetport_sctp(listener))
-			listener->active = 1;
-		else
-			close_listener(listener);
-#else
-		sendto_realops_snomask(SNO_GENERAL, L_ALL,
-				"SCTP is not supported on the system on which this IRCd is running. Please remove the sctpport/sctpsslport declaration for %d from your configuration file. This is not an error; the IRCd will continue to function correctly without SCTP support.",
-				get_listener_port(listener));
-#endif
-	} else {
-		if(inetport(listener))
-			listener->active = 1;
-		else
-			close_listener(listener);
-	}
+	if(inetport(listener))
+		listener->active = 1;
+	else
+		close_listener(listener);
 }
 
 /*
@@ -622,7 +491,7 @@ add_connection(struct Listener *listener, rb_fde_t *F, struct sockaddr *sai, str
 	if (listener->ssl)
 	{
 		rb_fde_t *xF[2];
- 		if(rb_socketpair(AF_UNIX, SOCK_STREAM, 0, &xF[0], &xF[1], "Incoming ssld Connection") == -1)
+		if(rb_socketpair(AF_UNIX, SOCK_STREAM, 0, &xF[0], &xF[1], "Incoming ssld Connection") == -1)
 		{
 			SetIOError(new_client);
 			exit_client(new_client, new_client, new_client, "Fatal Error");
@@ -639,9 +508,6 @@ add_connection(struct Listener *listener, rb_fde_t *F, struct sockaddr *sai, str
 		new_client->localClient->F = F;
 		SetSSL(new_client);
 	}
-
-	if (!!(listener->sctp)) SetSCTP(new_client);
-	// wake up stupid girl
 
 	new_client->localClient->listener = listener;
 

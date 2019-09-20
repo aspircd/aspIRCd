@@ -60,7 +60,7 @@ DECLARE_MODULE_AV1(kick, NULL, NULL, kick_clist, NULL, NULL, "$Revision: 3317 $"
 static int
 m_kick(struct Client *client_p, struct Client *source_p, int parc, const char *parv[])
 {
-	struct membership *msptr, *mstptr;
+	struct membership *msptr;
 	struct Client *who;
 	struct Channel *chptr;
 	int chasing = 0;
@@ -86,17 +86,6 @@ m_kick(struct Client *client_p, struct Client *source_p, int parc, const char *p
 		return 0;
 	}
 
-
-	if((p = strchr(parv[2], ',')))
-		*p = '\0';
-
-	user = parv[2];		/* strtoken(&p2, parv[2], ","); */
-
-	if(!(who = find_chasing(source_p, user, &chasing)))
-	{
-		return 0;
-	}
-
 	if(!IsServer(source_p))
 	{
 		msptr = find_channel_membership(chptr, source_p);
@@ -108,8 +97,7 @@ m_kick(struct Client *client_p, struct Client *source_p, int parc, const char *p
 			return 0;
 		}
 
-//		if(get_channel_access(source_p, msptr, MODE_ADD) < CHFL_CHANOP)
-		if(!is_better_op(msptr, find_channel_membership(chptr, who)))
+		if(get_channel_access(source_p, msptr, MODE_ADD) < CHFL_CHANOP)
 		{
 			if(MyConnect(source_p))
 			{
@@ -149,9 +137,19 @@ m_kick(struct Client *client_p, struct Client *source_p, int parc, const char *p
 		 */
 	}
 
-	mstptr = find_channel_membership(chptr, who);
+	if((p = strchr(parv[2], ',')))
+		*p = '\0';
 
-	if(mstptr != NULL)
+	user = parv[2];		/* strtoken(&p2, parv[2], ","); */
+
+	if(!(who = find_chasing(source_p, user, &chasing)))
+	{
+		return 0;
+	}
+
+	msptr = find_channel_membership(chptr, who);
+
+	if(msptr != NULL)
 	{
 		if(MyClient(source_p) && IsService(who))
 		{
@@ -166,7 +164,7 @@ m_kick(struct Client *client_p, struct Client *source_p, int parc, const char *p
 
 			hookdata.client = source_p;
 			hookdata.chptr = chptr;
-			hookdata.msptr = mstptr;
+			hookdata.msptr = msptr;
 			hookdata.target = who;
 			hookdata.approved = 1;
 			hookdata.dir = MODE_ADD;	/* ensure modules like override speak up */
@@ -200,7 +198,7 @@ m_kick(struct Client *client_p, struct Client *source_p, int parc, const char *p
 		sendto_server(client_p, chptr, CAP_TS6, NOCAPS,
 			      ":%s KICK %s %s :%s",
 			      use_id(source_p), chptr->chname, use_id(who), comment);
-		remove_user_from_channel(mstptr);
+		remove_user_from_channel(msptr);
 	}
 	else if (MyClient(source_p))
 		sendto_one_numeric(source_p, ERR_USERNOTINCHANNEL,

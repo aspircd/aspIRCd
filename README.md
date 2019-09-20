@@ -1,66 +1,66 @@
-## aspIRCd
+# charybdis
 
-**aspIRCd** is a high performance, IRCv3.2 capable, and scalable
-IRC daemon. It is a fork of the now-defunct ircd-seven and seeks to continue in
-the direction ircd-seven was headed.
+Charybdis is a reference implementation of the IRCv3.1 server component.  It is meant to be
+used with an IRCv3-capable services implementation such as [Atheme][atheme] or [Anope][anope].
 
-**ircd-seven**
-some of the coding from ircd-seven has been used on aspIRCd. Credit to ilbelkyr (www.freenode.net)
+   [atheme]: http://www.atheme.net/
+   [anope]: http://www.anope.org/
 
-## Main differences between this release and depreciated Charybdis 4:
-- It has +q (owner mode) , +a (admin mode) and the general +Ohv modes which Charybdis already contains. Due to this we had to shift the quiet mode to +y
-- It is headed in the direction of UnrealIRCd and hence a lot of features on the Charybdis platform.
-- It has one more major feature +h which IRC Operators set to declare themselves as helpops and show an swhois ‘is available for help.’ in their /whois
-- It has in built support for mbedTLS which is automatically selected on ARM based servers
-- It has support for Stream Control Transmission Protocol (SCTP) for connection and linking servers
-- It has support for starttls and TLS v1.3 (most secured TLS base in the IRC industry)
+# necessary requirements
 
-## Supported Platforms
+ * A supported platform
+ * A working dynamic load library.
+ * A working lex.  Solaris /usr/ccs/bin/lex appears to be broken, on this system flex should be used.
 
-All modern \*NIX systems should work. You need the equivalent of the following
-Debian packages:
+# feature specific requirements
 
- - `libssl-dev`
- - `flex`
- - `bison`
- - `build-essential`
- - `libsqlite3-dev`
- - `libtool`
- - `autoconf`
- 
- You however have a choice of choosing any of your favourite SSL supporting applications. One of them, we primarily support is one of that of OpenSSL.
- To make sure SSL ports works, issue a certificate to your IRC Network by going in the `main directory@/bin` and running:
- `./genssl.sh`
- 
- ## Installation
- 
- This is a quick setup guide. In order to install, fork this repository : `git clone https://github.com/baconcoders/aspIRCd.git`
- 
-* Then `cd aspIRCd`
-* then to build the configuration file: `./autogen.sh`
-* then use `libtoolize --ltdl` to link all the modules
+ * For SSL/TLS client and server connections, one of:
 
-* then to configure the IRCd run `./configure`
-* to build the IRCd run `make`
-* followed by `make install`
+   * OpenSSL 1.0.0 or newer (--enable-openssl)
+   * LibreSSL (--enable-openssl)
+   * MbedTLS (--enable-mbedtls)
+   * GnuTLS (--enable-gnutls)
 
-**your IRCd will be installed in `/HOME DIRECTORY/ircd` by default.**
+ * For certificate-based oper CHALLENGE, OpenSSL 1.0.0 or newer.
+   (Using CHALLENGE is not recommended for new deployments, so if you want to use a different TLS library,
+    feel free.)
 
-## Debian/ubuntu Users
+ * For ECDHE under OpenSSL, on Solaris and RHEL/Fedora (and its derivatives such as CentOS) you will
+   need to compile your own OpenSSL on these systems, as they have removed support for ECC/ECDHE.
+   Alternatively, consider using another library (see above).
 
-If you have a newly installed OS, you should primarily run `apt-get update` followed by `apt-get install libssl-dev flex bison build-essential libsqlite3-dev pkg-config autoconf openssl libtool`
+# tips
 
-Read the included documentation for detailed compilation and install
-directions.
+ * To report bugs in charybdis, visit us on IRC at chat.freenode.net #charybdis
 
-## Support
-Interested in meeting the developers?
-The official channel for aspIRCd is `#aspIRCd` on
-`irc.aspircd.com Port 6667/+6697(SSL)`
+ * Please read doc/index.txt to get an overview of the current documentation.
 
-Finding services that fully supports this IRCd?
-https://github.com/aspircd/shale-services
-the protocol for this IRCd is **aspircd.c** provided with services
-for further references of how to load the protocol, refer to shale.example.conf
+ * The files, /etc/services, /etc/protocols, and /etc/resolv.conf, SHOULD be
+   readable by the user running the server in order for ircd to start with
+   the correct settings.  If these files are wrong, charybdis will try to use
+   127.0.0.1 for a resolver as a last-ditch effort.
 
-Please use ***GitHub issue tracker*** for any issues
+ * FREEBSD USERS: if you are compiling with ipv6 you may experience
+   problems with ipv4 due to the way the socket code is written.  To
+   fix this you must: "sysctl net.inet6.ip6.v6only=0"
+
+ * SOLARIS USERS: this code appears to tickle a bug in older gcc and 
+   egcs ONLY on 64-bit Solaris7.  gcc-2.95 and SunPro C on 64bit should
+   work fine, and any gcc or SunPro compiled on 32bit.
+
+ * SUPPORTED PLATFORMS: this code should compile without any warnings on:
+
+   * FreeBSD 10
+   * Gentoo & Gentoo Hardened ~x86/~amd64/~fbsd
+   * RHEL 6 / 7
+   * Debian Jessie
+   * OpenSuSE 11/12
+   * OpenSolaris 2008.x?
+   * Solaris 10 sparc.
+  
+  Please let us know if you find otherwise.  
+  It probably does not compile on AIX, IRIX or libc5 Linux.
+
+ * Please read NEWS for information about what is in this release.
+
+ * Other files recommended for reading: BUGS, INSTALL

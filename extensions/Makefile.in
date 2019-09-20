@@ -45,7 +45,6 @@ SRCS =                          \
   createoperonly.c		\
   extb_account.c		\
   extb_canjoin.c		\
-  extb_dnsbl.c		\
   extb_channel.c		\
   extb_hostmask.c		\
   extb_oper.c			\
@@ -58,7 +57,7 @@ SRCS =                          \
   force_user_invis.c		\
   hurt.c			\
   ip_cloaking.c			\
-  ip_cloaking_5.c		\
+  ip_cloaking_old.c		\
   ip_cloaking_3.0.c		\
   ip_cloaking_4.0.c		\
   override.c			\
@@ -91,14 +90,6 @@ SRCS =                          \
   spy_stats_notice.c            \
   spy_stats_p_notice.c		\
   spy_trace_notice.c		\
-  extb_ssl_fp.c			\
-  extb_webircname.c		\
-  extb_sctp.c			\
-  whois_helpop.c		\
-  umode_isabot.c		\
-  umode_comchanonlymsg.c	\
-  umode_showonlycomchans.c	\
-  umode_sslonlymsg.c		\
   example_module.c
 
 OBJS = ${SRCS:.c=.so}

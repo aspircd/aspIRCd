@@ -99,7 +99,7 @@ privilegeset_extend(struct PrivilegeSet *parent, const char *name, const char *p
 	if (set != NULL)
 	{
 		if (!(set->status & CONF_ILLEGAL))
-			ilog(L_MAIN, "Duplicate privset %s, replacing privs.", name);
+			ilog(L_MAIN, "Duplicate privset %s", name);
 		set->status &= ~CONF_ILLEGAL;
 		rb_free(set->privs);
 	}
@@ -173,10 +173,6 @@ privilegeset_mark_all_illegal(void)
 
 		/* the "default" privset is special and must remain available */
 		if (!strcmp(set->name, "default"))
-			continue;
-
-		/* SVSOPER privsets are special and must remain available */
-		if (*set->name == '!' && find_person(set->name+1) != NULL)
 			continue;
 
 		set->status |= CONF_ILLEGAL;

@@ -687,7 +687,6 @@ set_default_conf(void)
 	/* ServerInfo.name = ServerInfo.name; */
 	ServerInfo.description = NULL;
 	ServerInfo.network_name = NULL;
-	ServerInfo.network_desc = NULL;
 
 	memset(&ServerInfo.ip, 0, sizeof(ServerInfo.ip));
 	ServerInfo.specific_ipv4_vhost = 0;
@@ -739,6 +738,7 @@ set_default_conf(void)
 	ConfigFileEntry.pace_wait = 10;
 	ConfigFileEntry.caller_id_wait = 60;
 	ConfigFileEntry.pace_wait_simple = 1;
+	ConfigFileEntry.listfake_wait = 0;
 	ConfigFileEntry.short_motd = NO;
 	ConfigFileEntry.no_oper_flood = NO;
 	ConfigFileEntry.fname_userlog = NULL;
@@ -765,7 +765,7 @@ set_default_conf(void)
 	ConfigFileEntry.away_interval = 30;
 
 #ifdef HAVE_LIBZ
-	ConfigFileEntry.compression_level = 7;
+	ConfigFileEntry.compression_level = 4;
 #endif
 
 	ConfigFileEntry.oper_umodes = UMODE_LOCOPS | UMODE_SERVNOTICE |
@@ -773,7 +773,6 @@ set_default_conf(void)
 	ConfigFileEntry.oper_only_umodes = UMODE_SERVNOTICE;
 	ConfigFileEntry.oper_snomask = SNO_GENERAL;
 
-	ConfigChannel.use_quiet = YES;
 	ConfigChannel.use_except = YES;
 	ConfigChannel.use_invex = YES;
 	ConfigChannel.use_forward = YES;
@@ -781,19 +780,11 @@ set_default_conf(void)
 	ConfigChannel.knock_delay = 300;
 	ConfigChannel.knock_delay_channel = 60;
 	ConfigChannel.max_chans_per_user = 15;
-	ConfigChannel.max_bans = 200;
-	ConfigChannel.max_bans_large = 5000;
+	ConfigChannel.max_bans = 25;
+	ConfigChannel.max_bans_large = 500;
 	ConfigChannel.only_ascii_channels = NO;
 	ConfigChannel.burst_topicwho = NO;
 	ConfigChannel.kick_on_split_riding = NO;
-
-	ConfigChannel.chnampfxglobal = "#+\"";
-	ConfigChannel.chnampfxlocal = "'-";
-	ConfigChannel.chnampfxmodeless = "+-";
-	ConfigChannel.operprefix = "*";
-	ConfigChannel.qprefix = "~";
-	ConfigChannel.aprefix = "&";
-	ConfigChannel.hprefix = "%";
 
 	ConfigChannel.default_split_user_count = 15000;
 	ConfigChannel.default_split_server_count = 10;
@@ -805,7 +796,6 @@ set_default_conf(void)
 	ConfigChannel.displayed_usercount = 3;
 
 	ConfigChannel.autochanmodes = MODE_TOPICLIMIT | MODE_NOPRIVMSGS;
-	ConfigChannel.halfopscannotuse = "";
 
 	ConfigServerHide.flatten_links = 0;
 	ConfigServerHide.links_delay = 300;
@@ -837,6 +827,9 @@ set_default_conf(void)
 
 	if (!alias_dict)
 		alias_dict = irc_dictionary_create(strcasecmp);
+
+	if (!fakechannel_dict)
+		fakechannel_dict = irc_dictionary_create(irccmp);
 }
 
 #undef YES
@@ -878,9 +871,6 @@ validate_conf(void)
 
 	if(ServerInfo.network_name == NULL)
 		ServerInfo.network_name = rb_strdup(NETWORK_NAME_DEFAULT);
-
-	if(ServerInfo.network_desc == NULL)
-		ServerInfo.network_desc = rb_strdup(NETWORK_NAME_DEFAULT);
 
 	if(ServerInfo.ssld_count < 1)
 		ServerInfo.ssld_count = 1;
@@ -1449,6 +1439,19 @@ free_alias_cb(struct DictionaryElement *ptr, void *unused)
 }
 
 /*
+ * free an fakechannel{} entry.
+ */
+static void
+free_fakechannel_cb(struct DictionaryElement *ptr, void *unused)
+{
+	struct fakechannel_entry *aptr = ptr->data;
+
+	rb_free(aptr->name);
+	rb_free(aptr->topic);
+	rb_free(aptr);
+}
+
+/*
  * clear_out_old_conf
  *
  * inputs       - none
@@ -1549,6 +1552,13 @@ clear_out_old_conf(void)
 	{
 		irc_dictionary_destroy(alias_dict, free_alias_cb, NULL);
 		alias_dict = NULL;
+	}
+
+	/* remove any fakechannels */
+	if (fakechannel_dict != NULL)
+	{
+		irc_dictionary_destroy(fakechannel_dict, free_fakechannel_cb, NULL);
+		fakechannel_dict = NULL;
 	}
 
 	destroy_blacklists();

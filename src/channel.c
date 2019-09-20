@@ -42,7 +42,6 @@
 #include "s_newconf.h"
 #include "logger.h"
 #include "ipv4_from_ipv6.h"
-#include "irc_dictionary.h"
 #include "s_assert.h"
 
 struct config_channel_entry ConfigChannel;
@@ -86,16 +85,12 @@ allocate_channel(const char *chname)
 	struct Channel *chptr;
 	chptr = rb_bh_alloc(channel_heap);
 	chptr->chname = rb_strdup(chname);
-	struct Dictionary *metadata;
-	metadata = irc_dictionary_create(irccmp);
-	chptr->metadata = metadata;
 	return (chptr);
 }
 
 void
 free_channel(struct Channel *chptr)
 {
-	channel_metadata_clear(chptr);
 	rb_free(chptr->chname);
 	rb_free(chptr->mode_lock);
 	rb_bh_free(channel_heap, chptr);
@@ -130,45 +125,7 @@ free_ban(struct Ban *bptr)
  * side effects - none
  */
 void
-send_channel_join(int isnew, struct Channel *chptr, struct Client *client_p)
-{
-	if (!IsClient(client_p))
-		return;
-
-	struct membership *msptr = find_channel_membership(chptr, client_p);
-	if (msptr == NULL) return; // Bail on this before it gets any worse... :\ XXX probably not necessary
-
-	if (MyClient(client_p) && isnew) {
-		if (IsCapable(client_p, CLICAP_EXTENDED_JOIN))
-			sendto_one(client_p, ":%s!%s@%s JOIN %s %s :%s",
-					     client_p->name, client_p->username, client_p->host, chptr->chname,
-					     EmptyString(client_p->user->suser) ? "*" : client_p->user->suser,
-					     client_p->info);
-		else
-			sendto_one(client_p, ":%s!%s@%s JOIN %s",
-					     client_p->name, client_p->username, client_p->host, chptr->chname);
-	}
-
-	if (is_delayed(msptr)) return; // probably auditorium
-
-	sendto_channel_local_with_capability_butone(client_p, ALL_MEMBERS, NOCAPS, CLICAP_EXTENDED_JOIN, chptr, ":%s!%s@%s JOIN %s",
-					     client_p->name, client_p->username, client_p->host, chptr->chname);
-
-	sendto_channel_local_with_capability_butone(client_p, ALL_MEMBERS, CLICAP_EXTENDED_JOIN, NOCAPS, chptr, ":%s!%s@%s JOIN %s %s :%s",
-					     client_p->name, client_p->username, client_p->host, chptr->chname,
-					     EmptyString(client_p->user->suser) ? "*" : client_p->user->suser,
-					     client_p->info);
-}
-
-/*
- * old_send_channel_join()
- *
- * input        - channel to join, client joining.
- * output       - none
- * side effects - none
- */
-void
-old_send_channel_join(struct Channel *chptr, struct Client *client_p)
+send_channel_join(struct Channel *chptr, struct Client *client_p)
 {
 	if (!IsClient(client_p))
 		return;
@@ -237,15 +194,13 @@ find_channel_membership(struct Channel *chptr, struct Client *client_p)
  * side effects -
  */
 const char *
-find_channel_status(struct membership *mp, int combine)
+find_channel_status(struct membership *msptr, int combine)
 {
-	static char buffer[7] = { (char)0, (char)0, (char)0, (char)0, (char)0, (char)0, (char)0 };
-	struct config_channel_entry *Cc = &ConfigChannel;
+	static char buffer[3];
 	char *p;
 
-	//p = buffer;
+	p = buffer;
 
-/*	out with this bullpucky.
 	if(is_chanop(msptr))
 	{
 		if(!combine)
@@ -255,90 +210,9 @@ find_channel_status(struct membership *mp, int combine)
 
 	if(is_voiced(msptr))
 		*p++ = '+';
-*/
-	// see what i meant in s_conf.[ch] about waste there being
-	// efficiency here? I've got one big snprintf()
-	// and now I only need to waste all but the first
-	// character for my return value if we aren't combining.
-	// -- reinhilde malik
-	if (combine < 2)
-		rb_snprintf(buffer, sizeof(buffer), "%s%s%s%s%s%s",
-			is_operbiz(mp) ? Cc->operprefix : "",
-			is_manager(mp) ? Cc->qprefix : "",
-			is_superop(mp) ? Cc->aprefix : "",
-			is_chanop(mp) ? "@" : "",
-			is_halfop(mp) ? Cc->hprefix : "",
-			is_voiced(mp) ? "+" : ""
-		);
-	else
-		rb_snprintf(buffer, sizeof(buffer), "%s%s%s%s%s%s",
-			is_operbiz(mp) ? "y" : "",
-			is_manager(mp) ? "q" : "",
-			is_superop(mp) ? "a" : "",
-			is_chanop(mp) ? "o" : "",
-			is_halfop(mp) ? "h" : "",
-			is_voiced(mp) ? "v" : ""
-		);
 
-	// *p = '\0';
-
-	if (combine == 0) {
-		p = buffer + 1; // skip a char.
-		*p = 0; // identical to '\0' but less effort...
-	}
-	return buffer; // e.g. where 0 is NULL & _ is "":
-	// member is +qhv and not combining...
-	// buffer is _~__%+ -> ~%+ -> ~0+ -> we return what looks like "~"
-	// member is +yqo and we combine.
-	// buffer is *~_@__ -> we return "*~@"
-}
-
-// for TS6 (sigh)
-const char *
-find_channel_status_ts(struct membership *mp, int combine)
-{
-	static char buffer[7] = { (char)0, (char)0, (char)0, (char)0, (char)0, (char)0, (char)0 };
-	struct config_channel_entry *Cc = &ConfigChannel;
-	char *p;
-
-	//p = buffer;
-
-/*	out with this bullpucky.
-	if(is_chanop(msptr))
-	{
-		if(!combine)
-			return "@";
-		*p++ = '@';
-	}
-
-	if(is_voiced(msptr))
-		*p++ = '+';
-*/
-	// see what i meant in s_conf.[ch] about waste there being
-	// efficiency here? I've got one big snprintf()
-	// and now I only need to waste all but the first
-	// character for my return value if we aren't combining.
-	// -- reinhilde malik
-	rb_snprintf(buffer, sizeof(buffer), "%s%s%s%s%s%s",
-		is_operbiz(mp) ? "*" : "",
-		is_manager(mp) ? "~" : "",
-		is_superop(mp) ? "&" : "",
-		is_chanop(mp) ? "@" : "",
-		is_halfop(mp) ? "%" : "",
-		is_voiced(mp) ? "+" : ""
-	);
-
-	// *p = '\0';
-
-	if (!combine) {
-		p = buffer + 1; // skip a char.
-		*p = 0; // identical to '\0' but less effort...
-	}
-	return buffer; // e.g. where 0 is NULL & _ is "":
-	// member is +qhv and not combining...
-	// buffer is _~__%+ -> ~%+ -> ~0+ -> we return what looks like "~"
-	// member is +yqo and we combine.
-	// buffer is *~_@__ -> we return "*~@"
+	*p = '\0';
+	return buffer;
 }
 
 /* add_user_to_channel()
@@ -555,12 +429,12 @@ channel_pub_or_secret(struct Channel *chptr)
 
 /* channel_member_names()
  *
- * input	- channel to list, client to list to, show endofnames, show delay
+ * input	- channel to list, client to list to, show endofnames
  * output	-
  * side effects - client is given list of users on channel
  */
 void
-channel_member_names(struct Channel *chptr, struct Client *client_p, int show_eon, int delayed)
+channel_member_names(struct Channel *chptr, struct Client *client_p, int show_eon)
 {
 	struct membership *msptr;
 	struct Client *target_p;
@@ -577,7 +451,7 @@ channel_member_names(struct Channel *chptr, struct Client *client_p, int show_eo
 	{
 		is_member = IsMember(client_p, chptr);
 
-		cur_len = mlen = rb_sprintf(lbuf, delayed ? form_str(RPL_DELNAMREPLY) : form_str(RPL_NAMREPLY),
+		cur_len = mlen = rb_sprintf(lbuf, form_str(RPL_NAMREPLY),
 					    me.name, client_p->name,
 					    channel_pub_or_secret(chptr), chptr->chname);
 
@@ -591,13 +465,10 @@ channel_member_names(struct Channel *chptr, struct Client *client_p, int show_eo
 			if(IsInvisible(target_p) && !is_member)
 				continue;
 
-			if (delayed && !is_delayed(msptr)) continue; // Showing delayed users; this user isn't delayed.
-			if (client_p != target_p && !delayed && is_delayed(msptr)) continue; // Showing undelayed users; this user is delayed.
-
 			if (IsCapable(client_p, CLICAP_USERHOST_IN_NAMES))
 			{
 				/* space, possible "@+" prefix */
-				if (cur_len + strlen(target_p->name) + strlen(target_p->username) + strlen(target_p->host) + 10 >= BUFSIZE - 5)
+				if (cur_len + strlen(target_p->name) + strlen(target_p->username) + strlen(target_p->host) + 5 >= BUFSIZE - 5)
 				{
 					*(t - 1) = '\0';
 					sendto_one(client_p, "%s", lbuf);
@@ -611,7 +482,7 @@ channel_member_names(struct Channel *chptr, struct Client *client_p, int show_eo
 			else
 			{
 				/* space, possible "@+" prefix */
-				if(cur_len + strlen(target_p->name) + 7 >= BUFSIZE - 3)
+				if(cur_len + strlen(target_p->name) + 3 >= BUFSIZE - 3)
 				{
 					*(t - 1) = '\0';
 					sendto_one(client_p, "%s", lbuf);
@@ -940,11 +811,11 @@ can_join(struct Client *source_p, struct Channel *chptr, const char *key, const 
 	if(chptr->mode.mode & MODE_REGONLY && EmptyString(source_p->user->suser))
 		i = ERR_NEEDREGGEDNICK;
 	/* join throttling stuff --nenolod */
-	else if(chptr->mode.join.num > 0 && chptr->mode.join.time > 0)
+	else if(chptr->mode.join_num > 0 && chptr->mode.join_time > 0)
 	{
 		if ((rb_current_time() - chptr->join_delta <=
-			chptr->mode.join.time) && (chptr->join_count >=
-			chptr->mode.join.num))
+			chptr->mode.join_time) && (chptr->join_count >=
+			chptr->mode.join_num))
 			i = ERR_THROTTLE;
 	}
 
@@ -1069,7 +940,7 @@ flood_attack_channel(int p_or_n, struct Client *source_p, struct Channel *chptr,
 		{
 			if(chptr->flood_noticed == 0)
 			{
-				sendto_realops_snomask(SNO_BOTS, ChannelIsLocal(chptr->chname) ? L_ALL : L_NETWIDE,
+				sendto_realops_snomask(SNO_BOTS, *chptr->chname == '&' ? L_ALL : L_NETWIDE,
 						     "Possible Flooder %s[%s@%s] on %s target: %s",
 						     source_p->name, source_p->username,
 						     source_p->orighost,
@@ -1346,13 +1217,13 @@ channel_modes(struct Channel *chptr, struct Client *client_p)
 			pbuf += rb_sprintf(pbuf, " %s", chptr->mode.key);
 	}
 
-	if(chptr->mode.join.num)
+	if(chptr->mode.join_num)
 	{
 		*mbuf++ = 'j';
 
 		if(pbuf > buf2 || !IsClient(client_p) || IsMember(client_p, chptr))
-			pbuf += rb_sprintf(pbuf, " %d:%d", chptr->mode.join.num,
-					   chptr->mode.join.time);
+			pbuf += rb_sprintf(pbuf, " %d:%d", chptr->mode.join_num,
+					   chptr->mode.join_time);
 	}
 
 	if(*chptr->mode.forward &&
@@ -1509,22 +1380,20 @@ resv_chan_forcepart(const char *name, const char *reason, int temp_time)
 			if(IsExemptResv(target_p))
 				continue;
 
-			sendto_one(target_p, ":%s!%s@%s PART %s :RESV (%s)", target_p->name, target_p->username, target_p->host, chptr->chname, reason);
-
-			if (!is_delayed(msptr)) sendto_channel_local_butone(target_p, ALL_MEMBERS, chptr, ":%s!%s@%s PART %s :RESV (%s)",
-			                     target_p->name, target_p->username,
-			                     target_p->host, chptr->chname, reason);
-
-			/* notify opers & user they were removed from the channel */
-			sendto_realops_snomask(SNO_GENERAL, L_ALL,
-			                     "Forced PART for %s!%s@%s from %s (%s)%s",
-			                     target_p->name, target_p->username, 
-			                     target_p->host, name, reason, is_delayed(msptr) ? " (user was delayed entry; may not have been shown leaving)" : "");
-
 			sendto_server(target_p, chptr, CAP_TS6, NOCAPS,
 			              ":%s PART %s", target_p->id, chptr->chname);
 
+			sendto_channel_local(ALL_MEMBERS, chptr, ":%s!%s@%s PART %s :%s",
+			                     target_p->name, target_p->username,
+			                     target_p->host, chptr->chname, target_p->name);
+
 			remove_user_from_channel(msptr);
+
+			/* notify opers & user they were removed from the channel */
+			sendto_realops_snomask(SNO_GENERAL, L_ALL,
+			                     "Forced PART for %s!%s@%s from %s (%s)",
+			                     target_p->name, target_p->username,
+			                     target_p->host, name, reason);
 
 			if(temp_time > 0)
 				sendto_one_notice(target_p, ":*** Channel %s is temporarily unavailable on this server.",
@@ -1533,124 +1402,5 @@ resv_chan_forcepart(const char *name, const char *reason, int temp_time)
 				sendto_one_notice(target_p, ":*** Channel %s is no longer available on this server.",
 				           name);
 		}
-	}
-}
-
-/*
- * channel_metadata_add
- * 
- * inputs	- pointer to channel struct
- *		- name of metadata item you wish to add
- *		- value of metadata item
- *		- 1 if metadata should be propegated, 0 if not
- * output	- none
- * side effects - metadata is added to the channel in question
- *		- metadata is propegated if propegate is set.
- */
-struct Metadata *
-channel_metadata_add(struct Channel *target, const char *name, const char *value, int propegate)
-{
-	struct Metadata *md;
-
-	md = rb_malloc(sizeof(struct Metadata));
-	md->name = rb_strdup(name);
-	md->value = rb_strdup(value);
-
-	irc_dictionary_add(target->metadata, md->name, md);
-	
-	if(propegate && !ChannelIsLocal(name))
-		sendto_match_servs(&me, "*", CAP_ENCAP, NOCAPS, "ENCAP * METADATA ADD %s %s :%s",
-				target->chname, name, value);
-
-	return md;
-}
-
-/*
- * channel_metadata_time_add
- * 
- * inputs	- pointer to channel struct
- *		- name of metadata item you wish to add
- *		- time_t you wish to add
- *		- value you wish to add
- * output	- none
- * side effects - metadata is added to the channel in question
- */
-struct Metadata *
-channel_metadata_time_add(struct Channel *target, const char *name, time_t timevalue, const char *value)
-{
-	struct Metadata *md;
-
-	md = rb_malloc(sizeof(struct Metadata));
-	md->name = rb_strdup(name);
-	md->value = rb_strdup(value);
-	md->timevalue = timevalue;
-
-	irc_dictionary_add(target->metadata, md->name, md);
-
-	return md;
-}
-
-/*
- * channel_metadata_delete
- * 
- * inputs	- pointer to channel struct
- *		- name of metadata item you wish to delete
- * output	- none
- * side effects - metadata is deleted from the channel in question
- * 		- deletion is propegated if propegate is set
- */
-void
-channel_metadata_delete(struct Channel *target, const char *name, int propegate)
-{
-	struct Metadata *md = channel_metadata_find(target, name);
-
-	if(!md)
-		return;
-
-	irc_dictionary_delete(target->metadata, md->name);
-
-	rb_free(md);
-
-	if(propegate && !ChannelIsLocal(name))
-		sendto_match_servs(&me, "*", CAP_ENCAP, NOCAPS, "ENCAP * METADATA DELETE %s %s",
-				target->chname, name);
-}
-
-/*
- * channel_metadata_find
- *
- * inputs	- pointer to channel struct
- *		- name of metadata item you wish to read
- * output	- the requested metadata, if it exists, elsewise null.
- * side effects -
- */
-struct Metadata *
-channel_metadata_find(struct Channel *target, const char *name)
-{
-	if(!target)
-		return NULL;
-
-	if(!target->metadata)
-		return NULL;
-
-	return irc_dictionary_retrieve(target->metadata, name);
-}
-
-/*
- * channel_metadata_clear
- *
- * inputs	- pointer to channel struct
- * output	- none
- * side effects - metadata is cleared from the channel in question
- */
-void
-channel_metadata_clear(struct Channel *chptr)
-{
-	struct Metadata *md;
-	struct DictionaryIter iter;
-
-	DICTIONARY_FOREACH(md, &iter, chptr->metadata)
-	{
-		channel_metadata_delete(chptr, md->name, 0);
 	}
 }

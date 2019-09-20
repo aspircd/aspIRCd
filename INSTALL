@@ -1,83 +1,99 @@
-                              irca INSTALL Document
+                           Charybdis INSTALL Document
 
    $Id: INSTALL 3384 2007-04-03 22:45:04Z jilles $
 
    Copyright (c) 2001 by ircd-hybrid team
    Copyright (c) 2002-2004 ircd-ratbox development team
    Copyright (c) 2005-2008 charybdis development team
-   Updated       2018-04-28 Ellenor Malik of asterIRC
 
      ----------------------------------------------------------------------
 
                                   HOW TO BUILD
 
-   Since prehistory, the distribution uses GNU autoconf instead of the
-   now-fossilized Config script. The Makefile has also been updated to
-   include CFLAGS defines for popular modern OSes.
+   As of hybrid-4, the distribution uses GNU autoconf instead of the old
+   Config script. The Makefile has also been updated to include CFLAGS
+   defines for popular modern OSes.
 
-   1.  Read the git commit log to find out about the exciting new features in
+   1. 
+
+       Read the NEWS file to find out about the exciting new features in
        this version. Other good reads are BUGS, doc/ircd.conf.example, and
        README.FIRST.
 
-   2.  Run autoconf. If you do not have autotools installed, you should
-       install them. Popular Berkeley Unices will usually have a ports
-       system, as will GNU+Linux stacks from all tier one names (Ubuntu,
-       Debian, RHEL, Fedora, CentOS) and most tier two names.
+   2. 
 
-   3.  Run the configure script. It will create include/setup.h and the
-       Makefiles to match your system. In irca, the paths are now handled
+       Run the configure script. It will create include/setup.h and the
+       Makefiles to match your system. In ircd-ratbox, the paths are now handled
        with the --prefix option to configure, not in config.h.
-       $HOME/ircd is the default if no prefix is specified.
+       /usr/local/ircd is the default if no prefix is specified.
 
-       ./configure --prefix="/usr/local/ircd" --enable-openssl
+       ./configure --prefix="/usr/local/ircd"
 
          Note: There are some special optional parameters to the configure
          script that some admins may wish to use.
 
-          * --enable-kqueue - Use the superior kqueue(2) system call as
+          * 
+
+            --enable-kqueue - Use the superior kqueue(2) system call as
             opposed to the default poll(2). This is currently only available
             on FreeBSD 4.1 or higher.
 
-          * --enable-devpoll - Enable the superior /dev/poll support on
+          * 
+
+            --enable-devpoll - Enable the superior /dev/poll support on
             Solaris. Linux /dev/poll is broken and will not work with this
             option.
 
-          * --enable-epoll - Enable the superior Linux Edge-Triggered Polling
+          * 
+
+            --enable-epoll - Enable the superior Linux Edge-Triggered Polling
             system. This is currently only available on 2.5 Linux kernel
             versions or later.
 
-          * --enable-openssl - Enable the openssl dependent crypto functions.
-            This will allow CHALLENGE and SSL links to function. On systems
+          * 
+
+            --enable-openssl - Enable the openssl dependent crypto functions.
+            This will allow CHALLENGE to work and encrypted links. On systems
             where the configure script can automatically detect OpenSSL, this
             option is not necessary. If configure cannot find OpenSSL, you
             must specify a path with this option
             (--enable-openssl=/path/to/openssl)
 
-          * --enable-ipv6 - Enable IPv6 support.
+          * 
 
-          * All of the above are enabled by default where available.
+            --enable-ipv6 - Enable IPv6 support.
 
-          * --enable-assert[=OPTION] - Enable some debugging code. OPTION is
+          * 
+
+            --enable-assert[=OPTION] - Enable some debugging code. OPTION is
             either 'soft' or 'hard' (default: hard). 'hard' should never be
             used on production servers as it may generate unnecessary cores.
             'soft' prevents cores from being generated but still imposes some
             additional load.
 
-          * --enable-small-net - Tunes the server for smaller networks by
+          * 
+
+            --enable-small-net - Tunes the server for smaller networks by
             reducing the startup memory footprint. This should really only be
             used for *small* networks, as this tends to be a performance hit
             on larger networks.
 
-          * --with-nicklen=LENGTH - Sets the maximum NICK length. Note that
-            this (or serverinfo::nicklen) must be consistent across your
-            entire network.
+          * 
 
-   4.  make should build ircd.
+            --with-nicklen=LENGTH - Sets the maximum NICK length. Note that
+            this must be consistent across your entire network.
+   3. 
 
-   5.  make install will install the server, modules, and tools in the
+       make should build ircd.
+
+   4. 
+
+       make install will install the server, modules, and tools in the
        the prefix specified when configure was run.
 
-   6.  If you wish to enable the user log, oper log, and failed oper log,
+   5. 
+
+       If you wish to enable the user log, oper log, and failed oper log,
        issue these commands at the shell prompt (in the prefix directory)
 
  $ touch logs/userlog
@@ -92,37 +108,47 @@
                                 HOW TO GET HELP
 
    Send Check or Money Order to... just kidding! You're on your own for
-   support. Try asking other netadmins using irca if you can't fix it
+   support. Try asking other ircd-ratbox admins on EFnet if you can't fix it
    yourself. If you do fix anything, however, please send context or unified
-   diffs to https://github.com/asterIRC/irca so the fixes can be incorporated
-   into the next release of irca. If irca crashes on you, PLEASE contact
-   https://github.com/asterIRC/irca/issues ASAP with a backtrace of the core.
+   diffs to ircd-ratbox@lists.ratbox.org so the fixes can be incorporated into
+   the next release of ircd-hybrid. If ratbox crashes on you, PLEASE contact
+   ircd-ratbox@lists.ratbox.org ASAP with a backtrace of the core.
 
-   DISCUSSION: There is an IRC channel for this, chatd and other asterIRC
-    projects. It is available at the irc server irc.umbrelix.net - the
-    channel is #coder-com .
+   DISCUSSION: There is a mailing list for discussion of ratbox issues,
+    To subscribe, visit:
+       http://lists.ratbox.org/cgi-bin/mailman/listinfo/ircd-ratbox
        
      ----------------------------------------------------------------------
 
-                              BACKTRACE INFORMATION
+                                     NOTES
 
    The best way to get a backtrace of the core is to follow this sequence of
    instructions:
 
-   1.  Change to the directory containing the core file
+   1. 
 
-   2.  Run gdb on the binary and the core file. With an unmodified irca
-       installation, an example command line is below (in the $HOME/ircd
+       Change to the directory containing the core file
+
+   2. 
+
+       Run gdb on the binary and the core file. With an unmodified ircd-ratbox
+       installation, an example command line is below (in the /usr/local/ircd
        directory)
 
  $ gdb bin/ircd ircd.core
 
-   3.  At the "(gdb)" prompt, enter the command "bt", then "bt f"
+   3. 
 
-   4.  Save the output of the backtrace command and send it to
-       ellenor@umbrellix.net and https://github.com/asterIRC/irca/issues
+       At the "(gdb)" prompt, enter the command "bt"
 
-   5.  Be sure to save the ircd binary, the modules, and the core file in a
+   4. 
+
+       Save the output of the backtrace command and send it to
+       ircd-ratbox@lists.ratbox.org
+
+   5. 
+
+       Be sure to save the ircd binary, the modules, and the core file in a
        safe place in case the developers need to look deeper than a backtrace
        provides.
 

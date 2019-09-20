@@ -63,7 +63,7 @@ mr_user(struct Client *client_p, struct Client *source_p, int parc, const char *
 	static char buf[BUFSIZE];
 	char *p;
 
-	if (strlen(client_p->id) == 3)
+	if (strlen(client_p->id) == 3 || (source_p->preClient && !EmptyString(source_p->preClient->id)))
 	{
 		exit_client(client_p, client_p, client_p, "Mixing client and server protocol");
 		return 0;
@@ -99,7 +99,6 @@ do_local_user(struct Client *client_p, struct Client *source_p,
 
 	if(!IsGotId(source_p))
 		rb_strlcpy(source_p->username, username, sizeof(source_p->username));
-	rb_strlcpy(source_p->userusername, username, sizeof(source_p->userusername));
 
 	if(source_p->name[0])
 	{

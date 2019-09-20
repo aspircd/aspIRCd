@@ -48,13 +48,8 @@ struct Message oper_msgtab = {
 	{mg_unreg, {m_oper, 3}, mg_ignore, mg_ignore, mg_ignore, {m_oper, 3}}
 };
 
-int hOperingUp;
 mapi_clist_av1 oper_clist[] = { &oper_msgtab, NULL };
-mapi_hlist_av1 oper_hlist[] = {
-	{ "opering_up",			&hOperingUp },
-	{ NULL, NULL }
-};
-DECLARE_MODULE_AV1(oper, NULL, NULL, oper_clist, oper_hlist, NULL, "$Revision: 1483 $");
+DECLARE_MODULE_AV1(oper, NULL, NULL, oper_clist, NULL, NULL, "$Revision: 1483 $");
 
 static int match_oper_password(const char *password, struct oper_conf *oper_p);
 
@@ -69,9 +64,6 @@ m_oper(struct Client *client_p, struct Client *source_p, int parc, const char *p
 	struct oper_conf *oper_p;
 	const char *name;
 	const char *password;
-	hook_data_client hdata;
-	hdata.client = source_p;
-	hdata.approved = 0;
 
 	name = parv[1];
 	password = parv[2];
@@ -89,14 +81,6 @@ m_oper(struct Client *client_p, struct Client *source_p, int parc, const char *p
 
 	oper_p = find_oper_conf(source_p->username, source_p->orighost,
 				source_p->sockhost, name);
-
-	call_hook(hOperingUp, &hdata);
-
-	if (hdata.approved)
-	{
-		sendto_one_numeric(source_p, ERR_NOOPERHOST, ":Oper access denied. See above for more information. If none is forthcoming, contact a server administrator.");
-		return 0;
-	}
 
 	if(oper_p == NULL)
 	{

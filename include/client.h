@@ -141,7 +141,6 @@ struct Client
 	 * field should be considered read-only.
 	 */
 	char username[USERLEN + 1];	/* client's username */
-	char userusername[USERLEN + 1];	/* client's username */
 
 	/*
 	 * client->host contains the resolved name or ip address
@@ -168,8 +167,6 @@ struct Client
 
 	time_t large_ctcp_sent; /* ctcp to large group sent, relax flood checks */
 	char *certfp; /* client certificate fingerprint */
-
-	struct Dictionary *metadata; //metadata
 };
 
 struct LocalUser
@@ -261,7 +258,6 @@ struct LocalUser
 	time_t last_knock;	/* time of last knock */
 	unsigned long random_ping;
 	struct AuthRequest *auth_request;
-	int flood_multiplier;	/* how much more leniency we are giving them than we normally would */
 
 	/* target change stuff */
 	/* targets we're aware of (fnv32(use_id(target_p))):
@@ -306,6 +302,8 @@ struct PreClient
 	struct Blacklist *dnsbl_listed; /* first dnsbl where it's listed */
 
 	struct rb_sockaddr_storage lip; /* address of our side of the connection */
+
+	char id[IDLEN]; /* UID/SID, unique on the network (unverified) */
 };
 
 struct ListClient
@@ -416,7 +414,6 @@ struct ListClient
 #define LFLAGS_SSL		0x00000001
 #define LFLAGS_FLUSH		0x00000002
 #define LFLAGS_CORK		0x00000004
-#define LFLAGS_SCTP		0x00000008
 
 /* umodes, settable flags */
 /* lots of this moved to snomask -- jilles */
@@ -430,14 +427,11 @@ struct ListClient
 #define UMODE_DEAF	   0x0080
 #define UMODE_NOFORWARD    0x0100	/* don't forward */
 #define UMODE_REGONLYMSG   0x0200	/* only allow logged in users to msg */
-#define UMODE_CERTFPHIDE   0x0400	/* hide certfp from !opers, or if
-					network::hide_certfp, show certfp to all */
 
 /* user information flags, only settable by remote mode or local oper */
 #define UMODE_OPER         0x1000	/* Operator */
 #define UMODE_ADMIN        0x2000	/* Admin on server */
 #define UMODE_SSLCLIENT    0x4000	/* using SSL */
-#define UMODE_SCTPCLIENT   0x8000	/* using SCTP */
 
 /* overflow flags */
 /* EARLIER FLAGS ARE IN s_newconf.h */
@@ -506,10 +500,6 @@ struct ListClient
 #define SetSSL(x)		((x)->localClient->localflags |= LFLAGS_SSL)
 #define ClearSSL(x)		((x)->localClient->localflags &= ~LFLAGS_SSL)
 
-#define IsSCTP(x)		((x)->localClient->localflags & LFLAGS_SCTP)
-#define SetSCTP(x)		((x)->localClient->localflags |= LFLAGS_SCTP)
-#define ClearSCTP(x)		((x)->localClient->localflags &= ~LFLAGS_SCTP)
-
 #define IsFlush(x)		((x)->localClient->localflags & LFLAGS_FLUSH)
 #define SetFlush(x)		((x)->localClient->localflags |= LFLAGS_FLUSH)
 #define ClearFlush(x)		((x)->localClient->localflags &= ~LFLAGS_FLUSH)
@@ -531,9 +521,6 @@ struct ListClient
 #define IsSSLClient(x)		((x)->umodes & UMODE_SSLCLIENT)
 #define SetSSLClient(x)		((x)->umodes |= UMODE_SSLCLIENT)
 #define ClearSSLClient(x)	((x)->umodes &= ~UMODE_SSLCLIENT)
-#define IsSCTPClient(x)		((x)->umodes & UMODE_SSLCLIENT)
-#define SetSCTPClient(x)	((x)->umodes |= UMODE_SCTPCLIENT)
-#define ClearSCTPClient(x)	((x)->umodes &= ~UMODE_SCTPCLIENT)
 #define SendWallops(x)          ((x)->umodes & UMODE_WALLOP)
 #define SendLocops(x)           ((x)->umodes & UMODE_LOCOPS)
 #define SendServNotice(x)       ((x)->umodes & UMODE_SERVNOTICE)
@@ -543,10 +530,6 @@ struct ListClient
 #define IsDeaf(x)		((x)->umodes & UMODE_DEAF)
 #define IsNoForward(x)		((x)->umodes & UMODE_NOFORWARD)
 #define IsSetRegOnlyMsg(x)	((x)->umodes & UMODE_REGONLYMSG)
-#define IsHidingCert(x)		(\
-				(((x)->umodes & UMODE_CERTFPHIDE) && ConfigFileEntry.hide_certfp == 0) || \
-				(!((x)->umodes & UMODE_CERTFPHIDE) && ConfigFileEntry.hide_certfp == 1) \
-				)
 
 #define SetGotId(x)             ((x)->flags |= FLAGS_GOTID)
 #define IsGotId(x)              (((x)->flags & FLAGS_GOTID) != 0)
@@ -635,10 +618,5 @@ extern char *generate_uid(void);
 
 void allocate_away(struct Client *);
 void free_away(struct Client *);
-
-extern struct Metadata *user_metadata_add(struct Client *target, const char *name, const char *value, int propegate);
-extern void user_metadata_delete(struct Client *target, const char *name, int propegate);
-extern struct Metadata *user_metadata_find(struct Client *target, const char *name);
-extern void user_metadata_clear(struct Client *target);
 
 #endif /* INCLUDED_client_h */

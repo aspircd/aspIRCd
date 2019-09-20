@@ -141,7 +141,7 @@ m_join(struct Client *client_p, struct Client *source_p, int parc, const char *p
 	char *name;
 	char *key = NULL;
 	const char *modes;
-	int i, flags = 0, newchan = 0;
+	int i, flags = 0;
 	char *p = NULL, *p2 = NULL;
 	char *chanlist;
 	char *mykey;
@@ -171,7 +171,7 @@ m_join(struct Client *client_p, struct Client *source_p, int parc, const char *p
 
 		/* check it begins with # or &, and local chans are disabled */
 		else if(!IsChannelName(name) ||
-			( ConfigChannel.disable_local_channels && ChannelIsLocal(name)))
+			( ConfigChannel.disable_local_channels && name[0] == '&'))
 		{
 			sendto_one_numeric(source_p, ERR_NOSUCHCHANNEL,
 					   form_str(ERR_NOSUCHCHANNEL), name);
@@ -240,7 +240,6 @@ m_join(struct Client *client_p, struct Client *source_p, int parc, const char *p
 				continue;
 
 			flags = 0;
-			newchan = 0;
 		}
 		else
 		{
@@ -260,7 +259,7 @@ m_join(struct Client *client_p, struct Client *source_p, int parc, const char *p
 				continue;
 			}
 
-			if(splitmode && !IsOper(source_p) && !ChannelIsLocal(name) &&
+			if(splitmode && !IsOper(source_p) && (*name != '&') &&
 			   ConfigChannel.no_create_on_split)
 			{
 				sendto_one(source_p, form_str(ERR_UNAVAILRESOURCE),
@@ -268,8 +267,7 @@ m_join(struct Client *client_p, struct Client *source_p, int parc, const char *p
 				continue;
 			}
 
-			flags = (ChannelHasModes(name)? CHFL_CHANOP : 0);
-			newchan = 1;
+			flags = CHFL_CHANOP;
 		}
 
 		if((rb_dlink_list_length(&source_p->user->channel) >=
@@ -317,43 +315,36 @@ m_join(struct Client *client_p, struct Client *source_p, int parc, const char *p
 
 		/* add the user to the channel */
 		add_user_to_channel(chptr, source_p, flags);
-		if (chptr->mode.join.num &&
-			rb_current_time() - chptr->join_delta >= chptr->mode.join.time)
+		if (chptr->mode.join_num &&
+			rb_current_time() - chptr->join_delta >= chptr->mode.join_time)
 		{
 			chptr->join_count = 0;
 			chptr->join_delta = rb_current_time();
 		}
 		chptr->join_count++;
 
-		/* debit user for join */
+		/* credit user for join */
 		credit_client_join(source_p);
 
 		/* we send the user their join here, because we could have to
 		 * send a mode out next.
 		 */
-		struct membership *msptr = find_channel_membership(chptr, source_p); // at this point a membership is guaranteed.
-		if (chptr->mode.mode & MODE_CHANDELAY && !(newchan)) msptr->flags |= CHFL_DELAY; // user is delayed. this state is stored locally
-		// and should be assumed if the channel is delayed. we don't care about desyncs as long as they don't affect op tracking and delayed isn't
-		// a privilege flag despite being stored in the same mask.
-
-		send_channel_join(1, chptr, source_p);
+		send_channel_join(chptr, source_p);
 
 		/* its a new channel, set +nt and burst. */
-		if(newchan == 1)
+		if(flags & CHFL_CHANOP)
 		{
 			chptr->channelts = rb_current_time();
-			chptr->mode.mode |= ChannelHasModes(name)?ConfigChannel.autochanmodes:ConfigChannel.modelessmodes;
+			chptr->mode.mode |= ConfigChannel.autochanmodes;
 			modes = channel_modes(chptr, &me);
 
-			if (ChannelHasModes(name)) {
-				sendto_channel_local(ONLY_CHANOPS, chptr, ":%s MODE %s %s",
+			sendto_channel_local(ONLY_CHANOPS, chptr, ":%s MODE %s %s",
 					     me.name, chptr->chname, modes);
-			}
 
 			sendto_server(client_p, chptr, CAP_TS6, NOCAPS,
-				      ":%s SJOIN %ld %s %s :%s%s",
+				      ":%s SJOIN %ld %s %s :@%s",
 				      me.id, (long) chptr->channelts,
-				      chptr->chname, modes, (flags & CHFL_CHANOP) ? "@" : "", source_p->id);
+				      chptr->chname, modes, source_p->id);
 		}
 		else
 		{
@@ -376,7 +367,7 @@ m_join(struct Client *client_p, struct Client *source_p, int parc, const char *p
 				   (unsigned long)chptr->topic_time);
 		}
 
-		channel_member_names(chptr, source_p, 1, 0);
+		channel_member_names(chptr, source_p, 1);
 
 		hook_info.client = source_p;
 		hook_info.chptr = chptr;
@@ -420,14 +411,13 @@ ms_join(struct Client *client_p, struct Client *source_p, int parc, const char *
 	if(!IsChannelName(parv[2]) || !check_channel_name(parv[2]))
 		return 0;
 
-	/* joins for local channels cant happen.
-	 * local channel config must be consistent across network. */
-	if(ChannelIsLocal(parv[2]))
+	/* joins for local channels cant happen. */
+	if(parv[2][0] == '&')
 		return 0;
 
 	char *mbuf = modebuf;
 	mode.key[0] = mode.forward[0] = '\0';
-	mode.mode = mode.limit = mode.join.num = mode.join.time = 0;
+	mode.mode = mode.limit = mode.join_num = mode.join_time = 0;
 
 	if((chptr = get_or_create_channel(source_p, parv[2], &isnew)) == NULL)
 		return 0;
@@ -448,7 +438,7 @@ ms_join(struct Client *client_p, struct Client *source_p, int parc, const char *
 	if(!isnew && !newts && oldts)
 	{
 		sendto_channel_local(ALL_MEMBERS, chptr,
-				     ":%s NOTICE %s :(\x02Notice\x02) TS for %s changed from %ld to 0",
+				     ":%s NOTICE %s :*** Notice -- TS for %s changed from %ld to 0",
 				     me.name, chptr->chname, chptr->chname, (long) oldts);
 		sendto_realops_snomask(SNO_GENERAL, L_ALL,
 				     "Server %s changing TS on %s from %ld to 0",
@@ -481,7 +471,7 @@ ms_join(struct Client *client_p, struct Client *source_p, int parc, const char *
 		/* If setting -j, clear join throttle state -- jilles */
 		chptr->join_count = chptr->join_delta = 0;
 		sendto_channel_local(ALL_MEMBERS, chptr,
-				     ":%s NOTICE %s :(\x02Notice\x02) TS for %s changed from %ld to %ld",
+				     ":%s NOTICE %s :*** Notice -- TS for %s changed from %ld to %ld",
 				     me.name, chptr->chname, chptr->chname,
 				     (long) oldts, (long) newts);
 		/* Update capitalization in channel name, this makes the
@@ -501,16 +491,14 @@ ms_join(struct Client *client_p, struct Client *source_p, int parc, const char *
 	if(!IsMember(source_p, chptr))
 	{
 		add_user_to_channel(chptr, source_p, CHFL_PEON);
-		if (chptr->mode.join.num &&
-			rb_current_time() - chptr->join_delta >= chptr->mode.join.time)
+		if (chptr->mode.join_num &&
+			rb_current_time() - chptr->join_delta >= chptr->mode.join_time)
 		{
 			chptr->join_count = 0;
 			chptr->join_delta = rb_current_time();
 		}
 		chptr->join_count++;
-		struct membership *msptr = find_channel_membership(chptr, source_p); // at this point a membership is guaranteed.
-		if (chptr->mode.mode & MODE_CHANDELAY) msptr->flags |= CHFL_DELAY; // user is delayed. this state is stored locally
-		send_channel_join(1, chptr, source_p);
+		send_channel_join(chptr, source_p);
 	}
 
 	sendto_server(client_p, chptr, CAP_TS6, NOCAPS,
@@ -560,7 +548,7 @@ ms_sjoin(struct Client *client_p, struct Client *source_p, int parc, const char 
 		return 0;
 
 	modebuf[0] = parabuf[0] = mode.key[0] = mode.forward[0] = '\0';
-	mode.mode = mode.limit = mode.join.num = mode.join.time = 0;
+	mode.mode = mode.limit = mode.join_num = mode.join_time = 0;
 
 	/* Hide connecting server on netburst -- jilles */
 	if (ConfigServerHide.flatten_links && !HasSentEob(source_p))
@@ -585,8 +573,8 @@ ms_sjoin(struct Client *client_p, struct Client *source_p, int parc, const char 
 		case 'j':
 			sscanf(parv[4 + args], "%d:%d", &joinc, &timeslice);
 			args++;
-			mode.join.num = joinc;
-			mode.join.time = timeslice;
+			mode.join_num = joinc;
+			mode.join_time = timeslice;
 			if(parc < 5 + args)
 				return 0;
 			break;
@@ -641,7 +629,7 @@ ms_sjoin(struct Client *client_p, struct Client *source_p, int parc, const char 
 	if(!isnew && !newts && oldts)
 	{
 		sendto_channel_local(ALL_MEMBERS, chptr,
-				     ":%s NOTICE %s :(\x02Notice\x02) TS for %s "
+				     ":%s NOTICE %s :*** Notice -- TS for %s "
 				     "changed from %ld to 0",
 				     me.name, chptr->chname, chptr->chname, (long) oldts);
 		sendto_realops_snomask(SNO_GENERAL, L_ALL,
@@ -715,12 +703,12 @@ ms_sjoin(struct Client *client_p, struct Client *source_p, int parc, const char 
 			mode.limit = oldmode->limit;
 		if(strcmp(mode.key, oldmode->key) < 0)
 			strcpy(mode.key, oldmode->key);
-		if(oldmode->join.num > mode.join.num ||
-				(oldmode->join.num == mode.join.num &&
-				 oldmode->join.time > mode.join.time))
+		if(oldmode->join_num > mode.join_num ||
+				(oldmode->join_num == mode.join_num &&
+				 oldmode->join_time > mode.join_time))
 		{
-			mode.join.num = oldmode->join.num;
-			mode.join.time = oldmode->join.time;
+			mode.join_num = oldmode->join_num;
+			mode.join_time = oldmode->join_time;
 		}
 		if(irccmp(mode.forward, oldmode->forward) < 0)
 			strcpy(mode.forward, oldmode->forward);
@@ -728,7 +716,7 @@ ms_sjoin(struct Client *client_p, struct Client *source_p, int parc, const char 
 	else
 	{
 		/* If setting -j, clear join throttle state -- jilles */
-		if (!mode.join.num)
+		if (!mode.join_num)
 			chptr->join_count = chptr->join_delta = 0;
 	}
 
@@ -758,7 +746,7 @@ ms_sjoin(struct Client *client_p, struct Client *source_p, int parc, const char 
 		chptr->bants++;
 
 		sendto_channel_local(ALL_MEMBERS, chptr,
-				     ":%s NOTICE %s :(\x02Notice\x02) TS for %s changed from %ld to %ld",
+				     ":%s NOTICE %s :*** Notice -- TS for %s changed from %ld to %ld",
 				     me.name, chptr->chname, chptr->chname,
 				     (long) oldts, (long) newts);
 		/* Update capitalization in channel name, this makes the
@@ -805,31 +793,11 @@ ms_sjoin(struct Client *client_p, struct Client *source_p, int parc, const char 
 	{
 		fl = 0;
 
-		for (i = 0; i < 6; i++)
+		for (i = 0; i < 2; i++)
 		{
-			if(*s == '*')
-			{
-				fl |= CHFL_OPERBIZ;
-				s++;
-			}
-			else if(*s == '~')
-			{
-				fl |= CHFL_MANAGER;
-				s++;
-			}
-			else if(*s == '&')
-			{
-				fl |= CHFL_SUPEROP;
-				s++;
-			}
-			else if(*s == '@')
+			if(*s == '@')
 			{
 				fl |= CHFL_CHANOP;
-				s++;
-			}
-			else if(*s == '%')
-			{
-				fl |= CHFL_HALFOP;
 				s++;
 			}
 			else if(*s == '+')
@@ -847,7 +815,7 @@ ms_sjoin(struct Client *client_p, struct Client *source_p, int parc, const char 
 		/* we assume for these we can fit at least one nick/uid in.. */
 
 		/* check we can fit another status+nick+space into a buffer */
-		if((mlen_uid + len_uid + IDLEN + 7) > (BUFSIZE - 3))
+		if((mlen_uid + len_uid + IDLEN + 3) > (BUFSIZE - 3))
 		{
 			*(ptr_uid - 1) = '\0';
 			sendto_server(client_p->from, NULL, CAP_TS6, NOCAPS, "%s", buf_uid);
@@ -857,29 +825,9 @@ ms_sjoin(struct Client *client_p, struct Client *source_p, int parc, const char 
 
 		if(keep_new_modes)
 		{
-			if(fl & CHFL_OPERBIZ)
-			{
-				*ptr_uid++ = '*';
-				len_uid++;
-			}
-			if(fl & CHFL_MANAGER)
-			{
-				*ptr_uid++ = '~';
-				len_uid++;
-			}
-			if(fl & CHFL_SUPEROP)
-			{
-				*ptr_uid++ = '&';
-				len_uid++;
-			}
 			if(fl & CHFL_CHANOP)
 			{
 				*ptr_uid++ = '@';
-				len_uid++;
-			}
-			if(fl & CHFL_HALFOP)
-			{
-				*ptr_uid++ = '%';
 				len_uid++;
 			}
 			if(fl & CHFL_VOICE)
@@ -900,351 +848,19 @@ ms_sjoin(struct Client *client_p, struct Client *source_p, int parc, const char 
 		if(!IsMember(target_p, chptr))
 		{
 			add_user_to_channel(chptr, target_p, fl);
-			send_channel_join(1, chptr, target_p);
+			send_channel_join(chptr, target_p);
 			joins++;
 		}
 
-
-		// This STILL makes dogs whimper, years down the road.
-                if(fl & CHFL_OPERBIZ)
-                {
-                        *mbuf++ = 'y';
-                        para[pargs++] = target_p->name;
-
-                        if(fl & CHFL_MANAGER)
-                        {
-                                /* its possible the +y has filled up MAXMODEPARAMS, if so, start
-                                 * a new buffer
-                                 */
-                                if(pargs >= MAXMODEPARAMS)
-                                {
-                                        *mbuf = '\0';
-                                        sendto_channel_local(ALL_MEMBERS, chptr,
-                                                        ":%s MODE %s %s %s %s %s %s",
-                                                        fakesource_p->name, chptr->chname,
-                                                        modebuf,
-                                                        para[0], para[1], para[2], para[3]);
-                                        mbuf = modebuf;
-                                        *mbuf++ = '+';
-                                        para[0] = para[1] = para[2] = para[3] = NULL;
-                                        pargs = 0;
-                                }
-
-                                *mbuf++ = 'q';
-                                para[pargs++] = target_p->name;
-                        }
-                        if(fl & CHFL_SUPEROP)
-                        {
-                                /* its possible the +y has filled up MAXMODEPARAMS, if so, start
-                                 * a new buffer
-                                 */
-                                if(pargs >= MAXMODEPARAMS)
-                                {
-                                        *mbuf = '\0';
-                                        sendto_channel_local(ALL_MEMBERS, chptr,
-                                                        ":%s MODE %s %s %s %s %s %s",
-                                                        fakesource_p->name, chptr->chname,
-                                                        modebuf,
-                                                        para[0], para[1], para[2], para[3]);
-                                        mbuf = modebuf;
-                                        *mbuf++ = '+';
-                                        para[0] = para[1] = para[2] = para[3] = NULL;
-                                        pargs = 0;
-                                }
-
-                                *mbuf++ = 'a';
-                                para[pargs++] = target_p->name;
-                        }
-                        if(fl & CHFL_CHANOP)
-                        {
-                               /* its possible the +q has filled up MAXMODEPARAMS, if so, start
-                                * a new buffer
-                                */
-                                if(pargs >= MAXMODEPARAMS)
-                                {
-                                        *mbuf = '\0';
-                                        sendto_channel_local(ALL_MEMBERS, chptr,
-                                                     ":%s MODE %s %s %s %s %s %s",
-                                                     fakesource_p->name, chptr->chname,
-                                                     modebuf,
-                                                     para[0], para[1], para[2], para[3]);
-                                        mbuf = modebuf;
-                                        *mbuf++ = '+';
-                                        para[0] = para[1] = para[2] = para[3] = NULL;
-                                        pargs = 0;
-                                }
-                        
-                                *mbuf++ = 'o';
-                                para[pargs++] = target_p->name;
-                        }
-                        if(fl & CHFL_HALFOP)
-                        {
-                                /* its possible the +q has filled up MAXMODEPARAMS, if so, start
-                                 * a new buffer
-                                 */
-                                if(pargs >= MAXMODEPARAMS)
-                                {
-                                        *mbuf = '\0';
-                                        sendto_channel_local(ALL_MEMBERS, chptr,
-                                                     ":%s MODE %s %s %s %s %s %s",
-                                                     fakesource_p->name, chptr->chname,
-                                                     modebuf,
-                                                     para[0], para[1], para[2], para[3]);
-                                        mbuf = modebuf;
-                                        *mbuf++ = '+';
-                                        para[0] = para[1] = para[2] = para[3] = NULL;
-                                        pargs = 0;
-                                }
-
-                                *mbuf++ = 'h';
-                                para[pargs++] = target_p->name;
-                        }
-                        if(fl & CHFL_VOICE)
-                        {
-                                /* its possible the +q has filled up MAXMODEPARAMS, if so, start
-                                 * a new buffer
-                                 */
-                                if(pargs >= MAXMODEPARAMS)
-                                {
-                                        *mbuf = '\0';
-                                        sendto_channel_local(ALL_MEMBERS, chptr,
-                                                     ":%s MODE %s %s %s %s %s %s",
-                                                     fakesource_p->name, chptr->chname,
-                                                     modebuf,
-                                                     para[0], para[1], para[2], para[3]);
-                                mbuf = modebuf;
-                                *mbuf++ = '+';
-                                para[0] = para[1] = para[2] = para[3] = NULL;
-                                pargs = 0;
-                                }
-
-                                *mbuf++ = 'v';
-                                para[pargs++] = target_p->name;
-                        }
-                }
-                else if(fl & CHFL_MANAGER)
-                {
-                        *mbuf++ = 'q';
-                        para[pargs++] = target_p->name;
-                        if(fl & CHFL_SUPEROP)
-                        {
-                                /* its possible the +y has filled up MAXMODEPARAMS, if so, start
-                                 * a new buffer
-                                 */
-                                if(pargs >= MAXMODEPARAMS)
-                                {
-                                        *mbuf = '\0';
-                                        sendto_channel_local(ALL_MEMBERS, chptr,
-                                                        ":%s MODE %s %s %s %s %s %s",
-                                                        fakesource_p->name, chptr->chname,
-                                                        modebuf,
-                                                        para[0], para[1], para[2], para[3]);
-                                        mbuf = modebuf;
-                                        *mbuf++ = '+';
-                                        para[0] = para[1] = para[2] = para[3] = NULL;
-                                        pargs = 0;
-                                }
-
-                                *mbuf++ = 'a';
-                                para[pargs++] = target_p->name;
-                        }
-                        if(fl & CHFL_CHANOP)
-                        {
-                               /* its possible the +q has filled up MAXMODEPARAMS, if so, start
-                                * a new buffer
-                                */
-                                if(pargs >= MAXMODEPARAMS)
-                                {
-                                        *mbuf = '\0';
-                                        sendto_channel_local(ALL_MEMBERS, chptr,
-                                                     ":%s MODE %s %s %s %s %s %s",
-                                                     fakesource_p->name, chptr->chname,
-                                                     modebuf,
-                                                     para[0], para[1], para[2], para[3]);
-                                        mbuf = modebuf;
-                                        *mbuf++ = '+';
-                                        para[0] = para[1] = para[2] = para[3] = NULL;
-                                        pargs = 0;
-                                }
-                        
-                                *mbuf++ = 'o';
-                                para[pargs++] = target_p->name;
-                        }
-                        if(fl & CHFL_HALFOP)
-                        {
-                                /* its possible the +q has filled up MAXMODEPARAMS, if so, start
-                                 * a new buffer
-                                 */
-                                if(pargs >= MAXMODEPARAMS)
-                                {
-                                        *mbuf = '\0';
-                                        sendto_channel_local(ALL_MEMBERS, chptr,
-                                                     ":%s MODE %s %s %s %s %s %s",
-                                                     fakesource_p->name, chptr->chname,
-                                                     modebuf,
-                                                     para[0], para[1], para[2], para[3]);
-                                        mbuf = modebuf;
-                                        *mbuf++ = '+';
-                                        para[0] = para[1] = para[2] = para[3] = NULL;
-                                        pargs = 0;
-                                }
-
-                                *mbuf++ = 'h';
-                                para[pargs++] = target_p->name;
-                        }
-                        if(fl & CHFL_VOICE)
-                        {
-                                /* its possible the +q has filled up MAXMODEPARAMS, if so, start
-                                 * a new buffer
-                                 */
-                                if(pargs >= MAXMODEPARAMS)
-                                {
-                                        *mbuf = '\0';
-                                        sendto_channel_local(ALL_MEMBERS, chptr,
-                                                     ":%s MODE %s %s %s %s %s %s",
-                                                     fakesource_p->name, chptr->chname,
-                                                     modebuf,
-                                                     para[0], para[1], para[2], para[3]);
-                                mbuf = modebuf;
-                                *mbuf++ = '+';
-                                para[0] = para[1] = para[2] = para[3] = NULL;
-                                pargs = 0;
-                                }
-
-                                *mbuf++ = 'v';
-                                para[pargs++] = target_p->name;
-                        }
-                }
-                else if(fl & CHFL_SUPEROP)
-		{
-			*mbuf++ = 'a';
-			para[pargs++] = target_p->name;
-
-			if(fl & CHFL_CHANOP)
-			{
-				/* its possible the +a has filled up MAXMODEPARAMS, if so, start
-				 * a new buffer
-				 */
-				if(pargs >= MAXMODEPARAMS)
-				{
-					*mbuf = '\0';
-					sendto_channel_local(ALL_MEMBERS, chptr,
-							     ":%s MODE %s %s %s %s %s %s",
-							     fakesource_p->name, chptr->chname,
-							     modebuf,
-							     para[0], para[1], para[2], para[3]);
-					mbuf = modebuf;
-					*mbuf++ = '+';
-					para[0] = para[1] = para[2] = para[3] = NULL;
-					pargs = 0;
-				}
-
-				*mbuf++ = 'o';
-				para[pargs++] = target_p->name;
-			}
-			if(fl & CHFL_HALFOP)
-			{
-				/* its possible the +a has filled up MAXMODEPARAMS, if so, start
-				 * a new buffer
-				 */
-				if(pargs >= MAXMODEPARAMS)
-				{
-					*mbuf = '\0';
-					sendto_channel_local(ALL_MEMBERS, chptr,
-							     ":%s MODE %s %s %s %s %s %s",
-							     fakesource_p->name, chptr->chname,
-							     modebuf,
-							     para[0], para[1], para[2], para[3]);
-					mbuf = modebuf;
-					*mbuf++ = '+';
-					para[0] = para[1] = para[2] = para[3] = NULL;
-					pargs = 0;
-				}
-
-				*mbuf++ = 'h';
-				para[pargs++] = target_p->name;
-			}
-			if(fl & CHFL_VOICE)
-			{
-				/* its possible the +a has filled up MAXMODEPARAMS, if so, start
-				 * a new buffer
-				 */
-				if(pargs >= MAXMODEPARAMS)
-				{
-					*mbuf = '\0';
-					sendto_channel_local(ALL_MEMBERS, chptr,
-							     ":%s MODE %s %s %s %s %s %s",
-							     fakesource_p->name, chptr->chname,
-							     modebuf,
-							     para[0], para[1], para[2], para[3]);
-					mbuf = modebuf;
-					*mbuf++ = '+';
-					para[0] = para[1] = para[2] = para[3] = NULL;
-					pargs = 0;
-				}
-
-				*mbuf++ = 'v';
-				para[pargs++] = target_p->name;
-			}
-		}
-		else if(fl & CHFL_CHANOP)
+		if(fl & CHFL_CHANOP)
 		{
 			*mbuf++ = 'o';
 			para[pargs++] = target_p->name;
 
-			if(fl & CHFL_HALFOP)
-			{
-				/* its possible the +o has filled up MAXMODEPARAMS, if so, start
-				 * a new buffer
-				 */
-				if(pargs >= MAXMODEPARAMS)
-				{
-					*mbuf = '\0';
-					sendto_channel_local(ALL_MEMBERS, chptr,
-							     ":%s MODE %s %s %s %s %s %s",
-							     fakesource_p->name, chptr->chname,
-							     modebuf,
-							     para[0], para[1], para[2], para[3]);
-					mbuf = modebuf;
-					*mbuf++ = '+';
-					para[0] = para[1] = para[2] = para[3] = NULL;
-					pargs = 0;
-				}
-
-				*mbuf++ = 'h';
-				para[pargs++] = target_p->name;
-			}
+			/* a +ov user.. bleh */
 			if(fl & CHFL_VOICE)
 			{
 				/* its possible the +o has filled up MAXMODEPARAMS, if so, start
-				 * a new buffer
-				 */
-				if(pargs >= MAXMODEPARAMS)
-				{
-					*mbuf = '\0';
-					sendto_channel_local(ALL_MEMBERS, chptr,
-							     ":%s MODE %s %s %s %s %s %s",
-							     fakesource_p->name, chptr->chname,
-							     modebuf,
-							     para[0], para[1], para[2], para[3]);
-					mbuf = modebuf;
-					*mbuf++ = '+';
-					para[0] = para[1] = para[2] = para[3] = NULL;
-					pargs = 0;
-				}
-
-				*mbuf++ = 'v';
-				para[pargs++] = target_p->name;
-			}
-		}
-		else if(fl & CHFL_HALFOP)
-		{
-			*mbuf++ = 'h';
-			para[pargs++] = target_p->name;
-
-			if(fl & CHFL_VOICE)
-			{
-				/* its possible the +h has filled up MAXMODEPARAMS, if so, start
 				 * a new buffer
 				 */
 				if(pargs >= MAXMODEPARAMS)
@@ -1496,7 +1112,7 @@ set_final_mode(char *mbuf, char *parabuf, struct Mode *mode, struct Mode *oldmod
 		len = rb_sprintf(pbuf, "%s ", oldmode->key);
 		pbuf += len;
 	}
-	if(oldmode->join.num && !mode->join.num)
+	if(oldmode->join_num && !mode->join_num)
 	{
 		if(dir != MODE_DEL)
 		{
@@ -1536,7 +1152,7 @@ set_final_mode(char *mbuf, char *parabuf, struct Mode *mode, struct Mode *oldmod
 		len = rb_sprintf(pbuf, "%s ", mode->key);
 		pbuf += len;
 	}
-	if(mode->join.num && (oldmode->join.num != mode->join.num || oldmode->join.time != mode->join.time))
+	if(mode->join_num && (oldmode->join_num != mode->join_num || oldmode->join_time != mode->join_time))
 	{
 		if(dir != MODE_ADD)
 		{
@@ -1544,7 +1160,7 @@ set_final_mode(char *mbuf, char *parabuf, struct Mode *mode, struct Mode *oldmod
 			dir = MODE_ADD;
 		}
 		*mbuf++ = 'j';
-		len = rb_sprintf(pbuf, "%d:%d ", mode->join.num, mode->join.time);
+		len = rb_sprintf(pbuf, "%d:%d ", mode->join_num, mode->join_time);
 		pbuf += len;
 	}
 	if(mode->forward[0] && strcmp(oldmode->forward, mode->forward) &&

@@ -119,18 +119,13 @@ m_topic(struct Client *client_p, struct Client *source_p, int parc, const char *
 		}
 
 		if(((chptr->mode.mode & MODE_TOPICLIMIT) == 0 ||
-			0!=(get_channel_access(source_p, msptr, MODE_ADD) & (ONLY_CHANOPS|CHFL_HALFOP))) &&
+					get_channel_access(source_p, msptr, MODE_ADD) >= CHFL_CHANOP) &&
 				(!MyClient(source_p) ||
 				 can_send(chptr, source_p, msptr)))
 		{
 			char topic_info[USERHOST_REPLYLEN];
 			rb_sprintf(topic_info, "%s!%s@%s",
 					source_p->name, source_p->username, source_p->host);
-			if (msptr->flags & CHFL_DELAY)
-			{ // He's delayed. Undelay him.
-				msptr->flags &= ~CHFL_DELAY;
-				send_channel_join(0, chptr, source_p);
-			}
 			set_channel_topic(chptr, parv[2], topic_info, rb_current_time());
 
 			sendto_server(client_p, chptr, CAP_TS6, NOCAPS,

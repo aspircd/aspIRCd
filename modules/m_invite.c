@@ -150,7 +150,7 @@ m_invite(struct Client *client_p, struct Client *source_p, int parc, const char 
 	 */
 	if(chptr->mode.mode & MODE_INVITEONLY ||
 			(chptr->mode.mode & MODE_REGONLY && EmptyString(target_p->user->suser)) ||
-			chptr->mode.limit || chptr->mode.join.num)
+			chptr->mode.limit || chptr->mode.join_num)
 		store_invite = 1;
 
 	if(MyConnect(source_p))

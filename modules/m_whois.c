@@ -61,18 +61,12 @@ struct Message whois_msgtab = {
 int doing_whois_hook;
 int doing_whois_global_hook;
 int doing_whois_channel_visibility_hook;
-int doing_whois_oper_visibility_hook;
-int upper_doing_whois_hook;
-int upper_doing_whois_global_hook;
 
 mapi_clist_av1 whois_clist[] = { &whois_msgtab, NULL };
 mapi_hlist_av1 whois_hlist[] = {
 	{ "doing_whois",			&doing_whois_hook },
 	{ "doing_whois_global",			&doing_whois_global_hook },
-	{ "upper_doing_whois",			&upper_doing_whois_hook },
-	{ "upper_doing_whois_global",		&upper_doing_whois_global_hook },
 	{ "doing_whois_channel_visibility",	&doing_whois_channel_visibility_hook },
-	{ "doing_whois_oper_visibility",	&doing_whois_oper_visibility_hook },
 	{ NULL, NULL }
 };
 
@@ -245,7 +239,6 @@ single_whois(struct Client *source_p, struct Client *target_p, int operspy)
 	int tlen;
 	hook_data_client hdata;
 	int extra_space = 0;
-	struct Metadata *md;
 #ifdef RB_IPV6
 	struct sockaddr_in ip4;
 #endif
@@ -303,10 +296,9 @@ single_whois(struct Client *source_p, struct Client *target_p, int operspy)
 					t = buf + mlen;
 				}
 
-				tlen = rb_sprintf(t, "%s%s%s,%s ",
+				tlen = rb_sprintf(t, "%s%s%s ",
 						hdata.approved ? "" : "!",
-						is_delayed(msptr) ? PREFIX_CHANDELAY : "",
-						find_channel_status(msptr, 2),
+						find_channel_status(msptr, 1),
 						chptr->chname);
 				t += tlen;
 				cur_len += tlen;
@@ -327,19 +319,11 @@ single_whois(struct Client *source_p, struct Client *target_p, int operspy)
 
 	if(IsOper(target_p))
 	{
-		hdata.approved = 0;
-		call_hook(doing_whois_oper_visibility_hook, &hdata);
-
-		if (!hdata.approved || IsOper(source_p)) {
-			if((md = user_metadata_find(target_p, "OPERSTRING")))
-				sendto_one_numeric(source_p, RPL_WHOISOPERATOR, "%s :%s",
-						   target_p->name, md->value);
-			else sendto_one_numeric(source_p, RPL_WHOISOPERATOR, form_str(RPL_WHOISOPERATOR),
-					   target_p->name,
-					   IsService(target_p) ? ConfigFileEntry.servicestring :
-					   (IsAdmin(target_p) ? GlobalSetOptions.adminstring :
-					    GlobalSetOptions.operstring));
-		}
+		sendto_one_numeric(source_p, RPL_WHOISOPERATOR, form_str(RPL_WHOISOPERATOR),
+				   target_p->name,
+				   IsService(target_p) ? ConfigFileEntry.servicestring :
+				   (IsAdmin(target_p) ? GlobalSetOptions.adminstring :
+				    GlobalSetOptions.operstring));
 	}
 
 	if(MyClient(target_p) && !EmptyString(target_p->localClient->opername) && IsOper(target_p) && IsOper(source_p))
@@ -351,27 +335,6 @@ single_whois(struct Client *source_p, struct Client *target_p, int operspy)
 				   target_p->name, obuf);
 	}
 
-	if((md = user_metadata_find(target_p, "PRIVS")) && IsOper(target_p) && IsOper(source_p))
-	{
-		char obuf[512];
-		rb_snprintf(obuf, sizeof(obuf), "this oper has the following privileges: %s",
-			    md->value);
-		sendto_one_numeric(source_p, RPL_WHOISSPECIAL, form_str(RPL_WHOISSPECIAL),
-				   target_p->name, obuf);
-	}
-
-
-	/* doing_whois_hook must only be called for local clients,
-	 * doing_whois_global_hook must only be called for local targets
-	 */
-	/* it is important that these are called *before* RPL_ENDOFWHOIS is
-	 * sent, services compatibility code depends on it. --anfl
-	 */
-	if(MyClient(source_p))
-		call_hook(upper_doing_whois_hook, &hdata);
-	else
-		call_hook(upper_doing_whois_global_hook, &hdata);
-
 	if(IsSSLClient(target_p))
 	{
 		char cbuf[256] = "is using a secure connection";
@@ -381,39 +344,11 @@ single_whois(struct Client *source_p, struct Client *target_p, int operspy)
 
 		sendto_one_numeric(source_p, RPL_WHOISSECURE, form_str(RPL_WHOISSECURE),
 				   target_p->name, cbuf);
-		if((source_p == target_p || (!IsHidingCert(target_p)) || IsOper(source_p)) &&
-					target_p->certfp != NULL)
+		if((source_p == target_p || IsOper(source_p)) &&
+				target_p->certfp != NULL)
 			sendto_one_numeric(source_p, RPL_WHOISCERTFP,
 					form_str(RPL_WHOISCERTFP),
 					target_p->name, target_p->certfp);
-	}
-
-	if(target_p->umodes & UMODE_SCTPCLIENT)
-		sendto_one_numeric(source_p, RPL_WHOISSPECIAL, form_str(RPL_WHOISSPECIAL),
-				   target_p->name, "is using an SCTP connection (rather than TCP, which is the default for IRC)");
-
-	if((md = user_metadata_find(target_p, "SWHOIS")))
-		sendto_one_numeric(source_p, RPL_WHOISSPECIAL, form_str(RPL_WHOISSPECIAL),
-				   target_p->name, md->value);
-
-	if((md = user_metadata_find(target_p, "WEBIRCNAME")))
-		sendto_one_numeric(source_p, RPL_WHOISSPECIAL, "%s :is using the gateway %s",
-				   target_p->name, md->value);
-
-	struct DictionaryIter iter;
-
-	DICTIONARY_FOREACH(md, &iter, target_p->metadata)
-	{
-		if (
-			md->name[0] == 'D' &&
-			md->name[1] == 'N' &&
-			md->name[2] == 'S' &&
-			md->name[3] == 'B' &&
-			md->name[4] == 'L' &&
-			md->name[5] == ':'
-		) {
-			sendto_one_numeric(source_p, RPL_WHOISSPECIAL, "%s :carries the DNSBL mark %s", target_p->name, md->name + 6);
-		}
 	}
 
 	if(MyClient(target_p))

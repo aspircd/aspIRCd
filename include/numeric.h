@@ -178,7 +178,6 @@
 #define RPL_WHOSPCRPL        354 /* from ircu -- jilles */
 #define RPL_ENDOFWHO         315
 #define RPL_NAMREPLY         353
-#define RPL_DELNAMREPLY      355 // DELNAMREPLY
 #define RPL_WHOWASREAL       360
 #define RPL_ENDOFNAMES       366
 
@@ -385,6 +384,5 @@
 #define RPL_SASLMECHS		908
 
 #define ERR_LAST_ERR_MSG     999
-#define RPL__SNOTICE		1998 // is actually sent as NOTICE
 
 #endif /* INCLUDED_numeric_h */

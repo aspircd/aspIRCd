@@ -513,8 +513,6 @@ main(int argc, char *argv[])
 		return -1;
 	}
 
-	prepare_numerics();
-
 	init_sys();
 
 	ConfigFileEntry.dpath = DPATH;

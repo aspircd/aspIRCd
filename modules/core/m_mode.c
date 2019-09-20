@@ -98,7 +98,7 @@ m_mode(struct Client *client_p, struct Client *source_p, int parc, const char *p
 	}
 
 	/* Now, try to find the channel in question */
-	if(!IsChannelName(dest))
+	if(!IsChanPrefix(*dest))
 	{
 		/* if here, it has to be a non-channel name */
 		user_mode(client_p, source_p, parc, parv);
@@ -176,7 +176,7 @@ ms_tmode(struct Client *client_p, struct Client *source_p, int parc, const char 
 	struct membership *msptr;
 
 	/* Now, try to find the channel in question */
-	if(!IsChannelName(parv[2]) || !check_channel_name(parv[2]))
+	if(!IsChanPrefix(parv[2][0]) || !check_channel_name(parv[2]))
 	{
 		sendto_one_numeric(source_p, ERR_BADCHANNAME, form_str(ERR_BADCHANNAME), parv[2]);
 		return 0;
@@ -215,7 +215,7 @@ ms_mlock(struct Client *client_p, struct Client *source_p, int parc, const char 
 	struct Channel *chptr = NULL;
 
 	/* Now, try to find the channel in question */
-	if(!IsChannelName(parv[2]) || !check_channel_name(parv[2]))
+	if(!IsChanPrefix(parv[2][0]) || !check_channel_name(parv[2]))
 	{
 		sendto_one_numeric(source_p, ERR_BADCHANNAME, form_str(ERR_BADCHANNAME), parv[2]);
 		return 0;
@@ -290,7 +290,7 @@ ms_bmask(struct Client *client_p, struct Client *source_p, int parc, const char 
 	int mems;
 	struct Client *fakesource_p;
 
-	if(!IsChannelName(parv[2]) || !check_channel_name(parv[2]))
+	if(!IsChanPrefix(parv[2][0]) || !check_channel_name(parv[2]))
 		return 0;
 
 	if((chptr = find_channel(parv[2])) == NULL)

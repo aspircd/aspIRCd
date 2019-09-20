@@ -56,7 +56,7 @@ show_whois(hook_data_client *data)
 	   (target_p->snomask & snomask_modes['W']))
 	{
 		sendto_one_notice(target_p,
-				":(\x02Notice\x02) %s (%s@%s) is doing a whois on you [%s]",
+				":*** Notice -- %s (%s@%s) is doing a whois on you [%s]",
 				source_p->name,
 				source_p->username, source_p->host,
 				source_p->servptr->name);

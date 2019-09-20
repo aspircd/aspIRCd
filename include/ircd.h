@@ -47,13 +47,6 @@ struct SetOptions
 	char adminstring[REALLEN];
 };
 
-struct Metadata
-{
-	const char *name;
-	const char *value;
-	time_t timevalue;
-};
-
 struct Counter
 {
 	int oper;		/* Opers */

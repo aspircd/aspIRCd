@@ -148,7 +148,6 @@ make_client(struct Client *from)
 {
 	struct Client *client_p = NULL;
 	struct LocalUser *localClient;
-	struct Dictionary *metadata;
 
 	client_p = rb_bh_alloc(client_heap);
 
@@ -177,8 +176,6 @@ make_client(struct Client *from)
 
 		client_p->preClient = rb_bh_alloc(pclient_heap);
 
-		metadata = irc_dictionary_create(irccmp);
-		client_p->metadata = metadata;
 		/* as good a place as any... */
 		rb_dlinkAdd(client_p, &client_p->localClient->tnode, &unknown_list);
 	}
@@ -187,9 +184,6 @@ make_client(struct Client *from)
 		client_p->localClient = NULL;
 		client_p->preClient = NULL;
 		client_p->from = from;	/* 'from' of local client is self! */
-
-		metadata = irc_dictionary_create(irccmp);
-		client_p->metadata = metadata;
 	}
 
 	SetUnknown(client_p);
@@ -811,11 +805,6 @@ clean_nick(const char *nick, int loc_client)
 	/* nicks cant start with a digit or -, and must have a length */
 	if(*nick == '-' || *nick == '\0')
 		return 0;
-
-	if (!EmptyString(ConfigChannel.operprefix)) if (*nick == *(ConfigChannel.operprefix)) return 0;
-	if (!EmptyString(ConfigChannel.qprefix)) if (*nick == *(ConfigChannel.qprefix)) return 0;
-	if (!EmptyString(ConfigChannel.aprefix)) if (*nick == *(ConfigChannel.aprefix)) return 0;
-	if (!EmptyString(ConfigChannel.hprefix)) if (*nick == *(ConfigChannel.hprefix)) return 0;
 
 	if(loc_client && IsDigit(*nick))
 		return 0;
@@ -1579,6 +1568,8 @@ exit_client(struct Client *client_p,	/* The local client originating the
 	    const char *comment	/* Reason for the exit */
 	)
 {
+	int ret = -1;
+
 	hook_data_client_exit hdata;
 	if(IsClosing(source_p))
 		return -1;
@@ -1599,23 +1590,25 @@ exit_client(struct Client *client_p,	/* The local client originating the
 	{
 		/* Local clients of various types */
 		if(IsPerson(source_p))
-			return exit_local_client(client_p, source_p, from, comment);
+			ret = exit_local_client(client_p, source_p, from, comment);
 		else if(IsServer(source_p))
-			return exit_local_server(client_p, source_p, from, comment);
+			ret = exit_local_server(client_p, source_p, from, comment);
 		/* IsUnknown || IsConnecting || IsHandShake */
 		else if(!IsReject(source_p))
-			return exit_unknown_client(client_p, source_p, from, comment);
+			ret = exit_unknown_client(client_p, source_p, from, comment);
 	}
 	else
 	{
 		/* Remotes */
 		if(IsPerson(source_p))
-			return exit_remote_client(client_p, source_p, from, comment);
+			ret = exit_remote_client(client_p, source_p, from, comment);
 		else if(IsServer(source_p))
-			return exit_remote_server(client_p, source_p, from, comment);
+			ret = exit_remote_server(client_p, source_p, from, comment);
 	}
 
-	return -1;
+	call_hook(h_after_client_exit, NULL);
+
+	return ret;
 }
 
 /*
@@ -2034,95 +2027,4 @@ error_exit_client(struct Client *client_p, int error)
 		rb_snprintf(errmsg, sizeof(errmsg), "Read error: %s", strerror(current_error));
 
 	exit_client(client_p, client_p, &me, errmsg);
-}
-
-
-/*
- * user_metadata_add
- * 
- * inputs	- pointer to client struct
- *		- name of metadata item you wish to add
- *		- value of metadata item
- *		- 1 if metadata should be propegated, 0 if not
- * output	- none
- * side effects - metadata is added to the user in question
- *		- metadata is propegated if propegate is set.
- */
-struct Metadata *
-user_metadata_add(struct Client *target, const char *name, const char *value, int propegate)
-{
-	struct Metadata *md;
-
-	md = rb_malloc(sizeof(struct Metadata));
-	md->name = rb_strdup(name);
-	md->value = rb_strdup(value);
-
-	irc_dictionary_add(target->metadata, md->name, md);
-
-	if(propegate && target->user != NULL)
-		sendto_match_servs(&me, "*", CAP_TS6, NOCAPS, "ENCAP * METADATA ADD %s %s :%s",
-				target->id, name, value);
-
-	return md;
-}
-
-/*
- * user_metadata_delete
- * 
- * inputs	- pointer to client struct
- *		- name of metadata item you wish to delete
- * output	- none
- * side effects - metadata is deleted from the user in question
- * 		- deletion is propegated if propegate is set
- */
-void
-user_metadata_delete(struct Client *target, const char *name, int propegate)
-{
-	struct Metadata *md = user_metadata_find(target, name);
-
-	if(!md)
-		return;
-
-	irc_dictionary_delete(target->metadata, md->name);
-
-	rb_free(md);
-
-	if(propegate && target->user != NULL)
-		sendto_match_servs(&me, "*", CAP_TS6, NOCAPS, "ENCAP * METADATA DELETE %s %s",
-				target->id, name);
-}
-
-/*
- * user_metadata_find
- * 
- * inputs	- pointer to client struct
- *		- name of metadata item you wish to read
- * output	- the requested metadata, if it exists, elsewise null.
- * side effects - 
- */
-struct Metadata *
-user_metadata_find(struct Client *target, const char *name)
-{
-	if(!target->metadata)
-		return NULL;
-
-	return irc_dictionary_retrieve(target->metadata, name);
-}
-/*
- * user_metadata_clear
- * 
- * inputs	- pointer to user struct
- * output	- none
- * side effects - metadata is cleared from the user in question
- */
-void
-user_metadata_clear(struct Client *target)
-{
-	struct Metadata *md;
-	struct DictionaryIter iter;
-	
-	DICTIONARY_FOREACH(md, &iter, target->metadata)
-	{
-		user_metadata_delete(target, md->name, 0);
-	}
 }

@@ -54,13 +54,12 @@ static rb_dlink_list yy_cluster_list;
 static struct oper_conf *yy_oper = NULL;
 
 static struct alias_entry *yy_alias = NULL;
+static struct fakechannel_entry *yy_fakechannel = NULL;
 
 static char *yy_blacklist_host = NULL;
 static char *yy_blacklist_reason = NULL;
-static char *yy_blacklist_mark = NULL;
 static int yy_blacklist_ipv4 = 1;
 static int yy_blacklist_ipv6 = 0;
-static int yy_blacklist_reject = 1;
 static rb_dlink_list yy_blacklist_filters;
 
 static char *yy_privset_extends = NULL;
@@ -238,13 +237,6 @@ conf_set_serverinfo_network_name(void *data)
 }
 
 static void
-conf_set_serverinfo_network_desc(void *data)
-{
-	rb_free(ServerInfo.network_desc);
-	ServerInfo.network_desc = rb_strdup((char *) data);
-}
-
-static void
 conf_set_serverinfo_vhost(void *data)
 {
 	if(rb_inet_pton(AF_INET, (char *) data, &ServerInfo.ip.sin_addr) <= 0)
@@ -347,7 +339,6 @@ static struct mode_table oper_table[] = {
 
 static struct mode_table auth_table[] = {
 	{"encrypted",		CONF_FLAGS_ENCRYPTED	},
-	{"use_user_ident",	CONF_FLAGS_USE_USER_IDENT },
 	{"spoof_notice",	CONF_FLAGS_SPOOF_NOTICE	},
 	{"exceed_limit",	CONF_FLAGS_NOLIMIT	},
 	{"dnsbl_exempt",	CONF_FLAGS_EXEMPTDNSBL	},
@@ -371,7 +362,6 @@ static struct mode_table connect_table[] = {
 	{ "encrypted",	SERVER_ENCRYPTED	},
 	{ "topicburst",	SERVER_TB		},
 	{ "ssl",	SERVER_SSL		},
-	{ "sctp",	SERVER_SCTP		},
 	{ NULL,		0			},
 };
 
@@ -386,7 +376,6 @@ static struct mode_table cluster_table[] = {
 	{ "resv",	SHARED_PRESV	},
 	{ "tresv",	SHARED_TRESV	},
 	{ "unresv",	SHARED_UNRESV	},
-	{ "svsoper",	SHARED_GRANT	},
 	{ "all",	CLUSTER_ALL	},
 	{NULL, 0}
 };
@@ -408,7 +397,6 @@ static struct mode_table shared_table[] =
 	{ "unresv",	SHARED_UNRESV	},
 	{ "locops",	SHARED_LOCOPS	},
 	{ "rehash",	SHARED_REHASH	},
-	{ "svsoper",	SHARED_GRANT	},
 	{ "all",	SHARED_ALL	},
 	{ "none",	0		},
 	{NULL, 0}
@@ -427,65 +415,6 @@ find_umode(struct mode_table *tab, const char *name)
 	}
 
 	return -1;
-}
-
-
-static int
-umode_from_gtables(const char *name)
-{
-	int i;
-
-	for (i = 0; i < 256; i++)
-	{
-		if (user_mode_names[i] == NULL) continue;
-		if(strcmp(user_mode_names[i], name) == 0)
-			return user_modes[i];
-	}
-
-	return -1;
-}
-
-static void
-set_modes_from_global_table(int *modes, const char *whatis, conf_parm_t * args)
-{
-	for (; args; args = args->next)
-	{
-		const char *umode;
-		int dir = 1;
-		int mode;
-
-		if((args->type & CF_MTYPE) != CF_STRING)
-		{
-			conf_report_error("Warning -- %s is not a string; ignoring.", whatis);
-			continue;
-		}
-
-		umode = args->v.string;
-
-		if(*umode == '~')
-		{
-			dir = 0;
-			umode++;
-		}
-
-		mode = umode_from_gtables(umode);
-
-		if(mode == -1)
-		{
-			conf_report_error("Warning -- unknown %s %s.", whatis, args->v.string);
-			continue;
-		}
-
-		if(mode)
-		{
-			if(dir)
-				*modes |= mode;
-			else
-				*modes &= ~mode;
-		}
-		else
-			*modes = 0;
-	}
 }
 
 static void
@@ -604,7 +533,6 @@ conf_begin_oper(struct TopConf *tc)
 	}
 
 	yy_oper = make_oper_conf();
-	yy_oper->flood_multiplier = -1; // keep user multiplier
 	yy_oper->flags |= OPER_ENCRYPTED;
 
 	return 0;
@@ -662,30 +590,8 @@ conf_end_oper(struct TopConf *tc)
 
 		yy_tmpoper->flags = yy_oper->flags;
 		yy_tmpoper->umodes = yy_oper->umodes;
-		yy_tmpoper->flood_multiplier = yy_oper->flood_multiplier;
 		yy_tmpoper->snomask = yy_oper->snomask;
 		yy_tmpoper->privset = yy_oper->privset;
-
-		if(!EmptyString(yy_oper->vhost)) {
-			if(valid_hostname(yy_oper->vhost))
-				yy_tmpoper->vhost = rb_strdup(yy_oper->vhost);
-			else if(!EmptyString(yy_oper->vhost))
-				conf_report_error("Ignoring vhost setting for oper %s -- invalid hostmask.", yy_oper->name);
-		}
-
-		if(!EmptyString(yy_oper->swhois)) {
-			if(strlen(yy_oper->swhois)<400)
-				yy_tmpoper->swhois = rb_strdup(yy_oper->swhois);
-			else if(!EmptyString(yy_oper->swhois))
-				conf_report_error("Ignoring swhois setting for oper %s -- swhois too long.", yy_oper->name);
-		}
-
-		if(!EmptyString(yy_oper->operstring)) {
-			if(strlen(yy_oper->operstring)<400)
-				yy_tmpoper->operstring = rb_strdup(yy_oper->operstring);
-			else if(!EmptyString(yy_oper->operstring))
-				conf_report_error("Ignoring operstring setting for oper %s -- operstring too long.", yy_oper->name);
-		}
 
 #ifdef HAVE_LIBCRYPTO
 		if(yy_oper->rsa_pubkey_file)
@@ -752,13 +658,6 @@ conf_set_oper_privset(void *data)
 }
 
 static void
-conf_set_oper_floodmult(void *data)
-{
-	unsigned int maxmult = 64; // sloooooowwwww
-	yy_oper->flood_multiplier = *(unsigned int *)data < maxmult ? *(unsigned int *)data : maxmult;
-}
-
-static void
 conf_set_oper_user(void *data)
 {
 	struct oper_conf *yy_tmpoper;
@@ -817,37 +716,13 @@ conf_set_oper_rsa_public_key_file(void *data)
 static void
 conf_set_oper_umodes(void *data)
 {
-	set_modes_from_global_table(&yy_oper->umodes, "umode", data);
+	set_modes_from_table(&yy_oper->umodes, "umode", umode_table, data);
 }
 
 static void
 conf_set_oper_snomask(void *data)
 {
 	yy_oper->snomask = parse_snobuf_to_mask(0, (const char *) data);
-}
-
-static void
-conf_set_oper_operstring(void *data)
-{
-	if (yy_oper->operstring)
-		rb_free(yy_oper->operstring);
-	yy_oper->operstring = rb_strdup((char *) data);
-}
-
-static void
-conf_set_oper_vhost(void *data)
-{
-	if (yy_oper->vhost)
-		rb_free(yy_oper->vhost);
-	yy_oper->vhost = rb_strdup((char *) data);
-}
-
-static void
-conf_set_oper_swhois(void *data)
-{
-	if (yy_oper->swhois)
-		rb_free(yy_oper->swhois);
-	yy_oper->swhois = rb_strdup((char *) data);
 }
 
 static int
@@ -857,10 +732,6 @@ conf_begin_class(struct TopConf *tc)
 		free_class(yy_class);
 
 	yy_class = make_class();
-	yy_class->flood_multiplier = 16; // KEEP THIS AT 16! the denominator of this madness
-	// will be made runtime configurable, but right now 16 is a compromise.
-	// 32 is slow flooding, 8 is faster flooding allowed, 4 is old no_oper_flood
-	// 0 is absolute allowed flood (multiplies the left side of the check by 0 so it's always OK)
 	return 0;
 }
 
@@ -947,13 +818,6 @@ conf_set_class_connectfreq(void *data)
 }
 
 static void
-conf_set_class_floodmult(void *data)
-{
-	unsigned int maxmult = 64; // sloooooowwwww, cannot go slower because that would just break shit
-	yy_class->flood_multiplier = *(unsigned int *)data < maxmult ? *(unsigned int *)data : maxmult;
-}
-
-static void
 conf_set_class_max_number(void *data)
 {
 	yy_class->max_total = *(unsigned int *) data;
@@ -990,7 +854,7 @@ conf_set_listen_defer_accept(void *data)
 }
 
 static void
-conf_set_listen_port_both_both(void *data, int ssl, int sctp)
+conf_set_listen_port_both(void *data, int ssl)
 {
 	conf_parm_t *args = data;
 	for (; args; args = args->next)
@@ -1003,9 +867,9 @@ conf_set_listen_port_both_both(void *data, int ssl, int sctp)
 		}
                 if(listener_address == NULL)
                 {
-			add_listener(args->v.number, listener_address, AF_INET, ssl, ssl || yy_defer_accept, sctp);
+			add_listener(args->v.number, listener_address, AF_INET, ssl, ssl || yy_defer_accept);
 #ifdef RB_IPV6
-			add_listener(args->v.number, listener_address, AF_INET6, ssl, ssl || yy_defer_accept, sctp);
+			add_listener(args->v.number, listener_address, AF_INET6, ssl, ssl || yy_defer_accept);
 #endif
                 }
 		else
@@ -1018,7 +882,7 @@ conf_set_listen_port_both_both(void *data, int ssl, int sctp)
 #endif
 				family = AF_INET;
 
-			add_listener(args->v.number, listener_address, family, ssl, ssl || yy_defer_accept, sctp);
+			add_listener(args->v.number, listener_address, family, ssl, ssl || yy_defer_accept);
 
                 }
 
@@ -1026,27 +890,15 @@ conf_set_listen_port_both_both(void *data, int ssl, int sctp)
 }
 
 static void
-conf_set_listen_sctpport(void *data)
-{
-	conf_set_listen_port_both_both(data, 0, 1);
-}
-
-static void
-conf_set_listen_sctpsslport(void *data)
-{
-	conf_set_listen_port_both_both(data, 1, 1);
-}
-
-static void
 conf_set_listen_port(void *data)
 {
-	conf_set_listen_port_both_both(data, 0, 0);
+	conf_set_listen_port_both(data, 0);
 }
 
 static void
 conf_set_listen_sslport(void *data)
 {
-	conf_set_listen_port_both_both(data, 1, 0);
+	conf_set_listen_port_both(data, 1);
 }
 
 static void
@@ -1111,9 +963,6 @@ conf_end_auth(struct TopConf *tc)
 	RB_DLINK_FOREACH_SAFE(ptr, next_ptr, yy_aconf_list.head)
 	{
 		yy_tmp = ptr->data;
-
-		if(yy_aconf->webircname)
-			yy_tmp->webircname = rb_strdup(yy_aconf->webircname);
 
 		if(yy_aconf->passwd)
 			yy_tmp->passwd = rb_strdup(yy_aconf->passwd);
@@ -1199,34 +1048,6 @@ conf_set_auth_passwd(void *data)
 		memset(yy_aconf->passwd, 0, strlen(yy_aconf->passwd));
 	rb_free(yy_aconf->passwd);
 	yy_aconf->passwd = rb_strdup(data);
-}
-
-static void
-conf_set_auth_webircname(void *data)
-{
-	char *p;
-	char *user = NULL;
-	char *host = NULL;
-
-	host = data;
-
-	if(EmptyString(host))
-	{
-		conf_report_error("Warning -- webircname empty.");
-		return;
-	}
-
-	if(strlen(host) > HOSTLEN)
-	{
-		conf_report_error("Warning -- webircname length invalid.");
-		return;
-	}
-
-	if(yy_aconf->webircname)
-		memset(yy_aconf->webircname, 0, strlen(yy_aconf->webircname));
-	rb_free(yy_aconf->webircname);
-	yy_aconf->webircname = rb_strdup(data);
-	yy_aconf->flags |= CONF_FLAGS_SPOOF_WEBCHAT;
 }
 
 static void
@@ -1798,10 +1619,8 @@ conf_set_general_default_umodes(void *data)
 			break;
 
 		/* don't allow +o */
-		case 'a':
 		case 'o':
 		case 'S':
-		case 'T':
 		case 'Z':
 		case ' ':
 			break;
@@ -1824,7 +1643,7 @@ conf_set_general_default_umodes(void *data)
 static void
 conf_set_general_oper_umodes(void *data)
 {
-	set_modes_from_global_table(&ConfigFileEntry.oper_umodes, "umode", data);
+	set_modes_from_table(&ConfigFileEntry.oper_umodes, "umode", umode_table, data);
 }
 
 static void
@@ -1852,7 +1671,7 @@ conf_set_general_certfp_method(void *data)
 static void
 conf_set_general_oper_only_umodes(void *data)
 {
-	set_modes_from_global_table(&ConfigFileEntry.oper_only_umodes, "umode", data);
+	set_modes_from_table(&ConfigFileEntry.oper_only_umodes, "umode", umode_table, data);
 }
 
 static void
@@ -1923,32 +1742,6 @@ conf_set_service_name(void *data)
 	rb_dlinkAddAlloc(tmp, &service_list);
 }
 
-static void conf_set_strdup (char *cfgname, int maxlen, char **targvar, char *value) {
-	char errmsg[BUFSIZE]; int actlen;
-	if ((actlen = strlen(value)) >maxlen) {
-		rb_snprintf(errmsg, BUFSIZE-1, "Ignoring %s -- value length %i exceeds maximum %i", cfgname, actlen, maxlen);
-		conf_report_error(errmsg);
-		return;
-	}
-	*targvar = rb_strdup(value); // pointer to the pointer, wuhu
-}
-
-#define strdup_cfg_entry(sy, nm, l, tv) static void \
-	sy (void *data) \
-	{ \
-		conf_set_strdup( (nm) , (l) , tv, (char *)data); \
-		return;\
-	};
-
-strdup_cfg_entry(conf_set_network_operprefix, "network::prefix_operbiz", 1, &ConfigChannel.operprefix);
-strdup_cfg_entry(conf_set_network_qprefix, "network::prefix_owner", 1, &ConfigChannel.qprefix);
-strdup_cfg_entry(conf_set_network_aprefix, "network::prefix_admin", 1, &ConfigChannel.aprefix);
-strdup_cfg_entry(conf_set_network_hprefix, "network::prefix_halfop", 1, &ConfigChannel.hprefix);
-strdup_cfg_entry(conf_set_network_nohalfops, "network::modes_disabled_for_halfops", 40, &ConfigChannel.halfopscannotuse);
-strdup_cfg_entry(conf_set_network_globalchan, "network::global_chantypes", 40, &ConfigChannel.chnampfxglobal);
-strdup_cfg_entry(conf_set_network_localchan, "network::local_chantypes", 40, &ConfigChannel.chnampfxlocal);
-strdup_cfg_entry(conf_set_network_modeless, "network::modeless_chantypes", 40, &ConfigChannel.chnampfxmodeless);
-
 static int
 conf_begin_alias(struct TopConf *tc)
 {
@@ -1956,8 +1749,6 @@ conf_begin_alias(struct TopConf *tc)
 
 	if (conf_cur_block_name != NULL)
 		yy_alias->name = rb_strdup(conf_cur_block_name);
-
-	yy_alias->prefix = "";
 
 	yy_alias->flags = 0;
 	yy_alias->hits = 0;
@@ -2012,52 +1803,111 @@ conf_set_alias_target(void *data)
 	yy_alias->target = rb_strdup(data);
 }
 
-static void
-conf_set_alias_prefix(void *data)
+static int
+conf_begin_fakechannel(struct TopConf *tc)
 {
-	if (data == NULL || yy_alias == NULL)	/* this shouldn't ever happen */
+	yy_fakechannel = rb_malloc(sizeof(struct fakechannel_entry));
+
+	/* Set defaults */
+	yy_fakechannel->name = NULL;
+	yy_fakechannel->topic = NULL;
+	yy_fakechannel->users_min = 50;
+	yy_fakechannel->users_max = 300;
+
+	if (conf_cur_block_name != NULL)
+		yy_fakechannel->name = rb_strdup(conf_cur_block_name);
+
+	return 0;
+}
+
+static int
+conf_end_fakechannel(struct TopConf *tc)
+{
+	if (yy_fakechannel == NULL)
+		return -1;
+
+	if (yy_fakechannel->name == NULL)
+	{
+		conf_report_error("Ignoring fakechannel -- must have a name.");
+
+		rb_free(yy_fakechannel->topic);
+		rb_free(yy_fakechannel);
+
+		return -1;
+	}
+
+	if (yy_fakechannel->users_max < yy_fakechannel->users_min)
+	{
+		conf_report_error("Ignoring fakechannel -- users_max less than users_min.");
+
+		rb_free(yy_fakechannel->name);
+		rb_free(yy_fakechannel->topic);
+		rb_free(yy_fakechannel);
+
+		return -1;
+	}
+
+	if(yy_fakechannel->topic == NULL)
+	{
+		yy_fakechannel->topic = rb_strdup("");
+	}
+
+	irc_dictionary_add(fakechannel_dict, yy_fakechannel->name, yy_fakechannel);
+
+	return 0;
+}
+
+static void
+conf_set_fakechannel_name(void *data)
+{
+	if (data == NULL || yy_fakechannel == NULL)	/* this shouldn't ever happen */
 		return;
 
-	yy_alias->prefix = rb_strdup(data);
+	rb_free(yy_fakechannel->name);
+	yy_fakechannel->name = rb_strdup(data);
 }
 
 static void
-conf_set_channel_modelessmodes(void *data)
+conf_set_fakechannel_topic(void *data)
 {
-	char *pm;
-	int what = MODE_ADD;
+	if (data == NULL || yy_fakechannel == NULL)	/* this shouldn't ever happen */
+		return;
 
-	ConfigChannel.modelessmodes = 0;
-	for (pm = (char *) data; *pm; pm++)
-	{
-		switch (*pm)
-		{
-		case '+':
-			what = MODE_ADD;
-			break;
-		case '-':
-			what = MODE_DEL;
-			break;
-
-		default:
-			if (chmode_table[(unsigned char) *pm].set_func == chm_simple)
-			{
-				if (what == MODE_ADD)
-					ConfigChannel.modelessmodes |= chmode_table[(unsigned char) *pm].mode_type;
-				else
-					ConfigChannel.modelessmodes &= ~chmode_table[(unsigned char) *pm].mode_type;
-			}
-			else
-			{
-				conf_report_error("channel::modelessmodes -- Invalid channel mode %c", *pm);
-				continue;
-			}
-			break;
-		}
-	}
+	rb_free(yy_fakechannel->topic);
+	yy_fakechannel->topic = rb_strdup(data);
 }
 
+static void
+conf_set_fakechannel_users_min(void *data)
+{
+	if (data == NULL || yy_fakechannel == NULL)	/* this shouldn't ever happen */
+		return;
 
+	int users_min = *((int *)data);
+	if(users_min < 0)
+	{
+		conf_report_error("fakechannel::users_min value %d is bogus, ignoring", users_min);
+		return;
+	}
+
+	yy_fakechannel->users_min = users_min;
+}
+
+static void
+conf_set_fakechannel_users_max(void *data)
+{
+	if (data == NULL || yy_fakechannel == NULL)	/* this shouldn't ever happen */
+		return;
+
+	int users_max = *((int *)data);
+	if(users_max < 0)
+	{
+		conf_report_error("fakechannel::users_max value %d is bogus, ignoring", users_max);
+		return;
+	}
+
+	yy_fakechannel->users_max = users_max;
+}
 
 static void
 conf_set_channel_autochanmodes(void *data)
@@ -2097,8 +1947,6 @@ conf_set_channel_autochanmodes(void *data)
 
 /* XXX for below */
 static void conf_set_blacklist_reason(void *data);
-static void conf_set_blacklist_mark(void *data);
-static void conf_set_blacklist_reject(void *data);
 
 static void
 conf_set_blacklist_host(void *data)
@@ -2133,8 +1981,6 @@ conf_set_blacklist_type(void *data)
 			yy_blacklist_ipv4 = 1;
 		else if (!strcasecmp(args->v.string, "ipv6"))
 			yy_blacklist_ipv6 = 1;
-		else if (!strcasecmp(args->v.string, "both"))
-			yy_blacklist_ipv6 = yy_blacklist_ipv4 = 1;
 		else
 			conf_report_error("blacklist::type has unknown address family %s",
 					  args->v.string);
@@ -2146,30 +1992,6 @@ conf_set_blacklist_type(void *data)
 		conf_report_error("blacklist::type has neither IPv4 nor IPv6 (defaulting to IPv4)");
 		yy_blacklist_ipv4 = 1;
 	}
-}
-
-static void
-conf_set_blacklist_reject(void *data)
-{
-	if (yy_blacklist_host && data)
-	{
-		yy_blacklist_reject = *(unsigned int*) data;
-	}
-}
-
-static void
-conf_set_blacklist_mark(void *data)
-{
-	if (yy_blacklist_host && data && strlen(data) < NICKLEN)
-	{
-		char *p;
-
-		if((p = strchr((char *) data, ' ')))
-			*p = '\0';
-
-		yy_blacklist_mark = rb_strdup(data);
-	} else
-		conf_report_error("blacklist::mark error has occured. Check that a host is set and that the mark is shorter than NICKLEN (%d) characters.", NICKLEN);
 }
 
 static void
@@ -2282,7 +2104,7 @@ conf_set_blacklist_reason(void *data)
 		}
 
 		new_blacklist(yy_blacklist_host, yy_blacklist_reason, yy_blacklist_ipv4, yy_blacklist_ipv6,
-				&yy_blacklist_filters, yy_blacklist_reject, yy_blacklist_mark);
+				&yy_blacklist_filters);
 	}
 
 cleanup_bl:
@@ -2300,14 +2122,11 @@ cleanup_bl:
 	}
 
 	rb_free(yy_blacklist_host);
-	rb_free(yy_blacklist_mark);
 	rb_free(yy_blacklist_reason);
 	yy_blacklist_host = NULL;
-	yy_blacklist_mark = NULL;
 	yy_blacklist_reason = NULL;
 	yy_blacklist_ipv4 = 1;
 	yy_blacklist_ipv6 = 0;
-	yy_blacklist_reject = 1;
 }
 
 /* public functions */
@@ -2585,11 +2404,7 @@ static struct ConfEntry conf_operator_table[] =
 	{ "snomask",    CF_QSTRING, conf_set_oper_snomask,      0, NULL },
 	{ "user",	CF_QSTRING, conf_set_oper_user,		0, NULL },
 	{ "password",	CF_QSTRING, conf_set_oper_password,	0, NULL },
-	{ "swhois",     CF_QSTRING, conf_set_oper_swhois,       0, NULL },
-	{ "operstring", CF_QSTRING, conf_set_oper_operstring,   0, NULL },
-	{ "vhost",      CF_QSTRING, conf_set_oper_vhost,        0, NULL },
 	{ "fingerprint",	CF_QSTRING, conf_set_oper_fingerprint,	0, NULL },
-	{ "flood_multiplier", CF_INT, conf_set_oper_floodmult, 0, NULL },
 	{ "\0",	0, NULL, 0, NULL }
 };
 
@@ -2614,7 +2429,6 @@ static struct ConfEntry conf_class_table[] =
 	{ "connectfreq", 	CF_TIME, conf_set_class_connectfreq,		0, NULL },
 	{ "max_number", 	CF_INT,  conf_set_class_max_number,		0, NULL },
 	{ "sendq", 		CF_TIME, conf_set_class_sendq,			0, NULL },
-	{ "flood_multiplier",	CF_INT,  conf_set_class_floodmult, 0, NULL},
 	{ "\0",	0, NULL, 0, NULL }
 };
 
@@ -2625,7 +2439,6 @@ static struct ConfEntry conf_auth_table[] =
 	{ "password",	CF_QSTRING, conf_set_auth_passwd,	0, NULL },
 	{ "class",	CF_QSTRING, conf_set_auth_class,	0, NULL },
 	{ "spoof",	CF_QSTRING, conf_set_auth_spoof,	0, NULL },
-	{ "webircname",	CF_QSTRING, conf_set_auth_webircname,	0, NULL },
 	{ "redirserv",	CF_QSTRING, conf_set_auth_redir_serv,	0, NULL },
 	{ "redirport",	CF_INT,     conf_set_auth_redir_port,	0, NULL },
 	{ "flags",	CF_STRING | CF_FLIST, conf_set_auth_flags,	0, NULL },
@@ -2676,6 +2489,7 @@ static struct ConfEntry conf_general_table[] =
 	{ "tkline_expire_notices",	 CF_YESNO, NULL, 0, &ConfigFileEntry.tkline_expire_notices },
 
 	{ "anti_nick_flood",	CF_YESNO, NULL, 0, &ConfigFileEntry.anti_nick_flood	},
+	{ "burst_away",		CF_YESNO, NULL, 0, &ConfigFileEntry.burst_away		},
 	{ "caller_id_wait",	CF_TIME,  NULL, 0, &ConfigFileEntry.caller_id_wait	},
 	{ "client_exit",	CF_YESNO, NULL, 0, &ConfigFileEntry.client_exit		},
 	{ "collision_fnc",	CF_YESNO, NULL, 0, &ConfigFileEntry.collision_fnc	},
@@ -2703,6 +2517,7 @@ static struct ConfEntry conf_general_table[] =
 	{ "operspy_dont_care_user_info", CF_YESNO, NULL, 0, &ConfigFileEntry.operspy_dont_care_user_info },
 	{ "pace_wait",		CF_TIME,  NULL, 0, &ConfigFileEntry.pace_wait		},
 	{ "pace_wait_simple",	CF_TIME,  NULL, 0, &ConfigFileEntry.pace_wait_simple	},
+	{ "listfake_wait",	CF_TIME,  NULL, 0, &ConfigFileEntry.listfake_wait	},
 	{ "ping_cookie",	CF_YESNO, NULL, 0, &ConfigFileEntry.ping_cookie		},
 	{ "reject_after_count",	CF_INT,   NULL, 0, &ConfigFileEntry.reject_after_count	},
 	{ "reject_ban_time",	CF_TIME,  NULL, 0, &ConfigFileEntry.reject_ban_time	},
@@ -2729,44 +2544,33 @@ static struct ConfEntry conf_general_table[] =
 	{ "client_flood_message_time",	CF_INT,   NULL, 0, &ConfigFileEntry.client_flood_message_time	},
 	{ "max_ratelimit_tokens",	CF_INT,   NULL, 0, &ConfigFileEntry.max_ratelimit_tokens	},
 	{ "away_interval",		CF_INT,   NULL, 0, &ConfigFileEntry.away_interval		},
-	{ "max_chans_per_user", CF_INT,   NULL, 0, &ConfigChannel.max_chans_per_user 	},
-	{ "resv_forcepart",     CF_YESNO, NULL, 0, &ConfigChannel.resv_forcepart	},
+	{ "certfp_method",	CF_STRING, conf_set_general_certfp_method, 0, NULL },
 	{ "\0", 		0, 	  NULL, 0, NULL }
 };
 
-static struct ConfEntry conf_network_table[] =
+static struct ConfEntry conf_channel_table[] =
 {
-	{ "kick_on_split_riding", CF_YESNO, NULL, 0, &ConfigChannel.kick_on_split_riding },
-	{ "no_create_on_split", CF_YESNO, NULL, 0, &ConfigChannel.no_create_on_split 	},
-	{ "no_join_on_split",	CF_YESNO, NULL, 0, &ConfigChannel.no_join_on_split	},
 	{ "default_split_user_count",	CF_INT,  NULL, 0, &ConfigChannel.default_split_user_count	 },
 	{ "default_split_server_count",	CF_INT,	 NULL, 0, &ConfigChannel.default_split_server_count },
 	{ "burst_topicwho",	CF_YESNO, NULL, 0, &ConfigChannel.burst_topicwho	},
+	{ "kick_on_split_riding", CF_YESNO, NULL, 0, &ConfigChannel.kick_on_split_riding },
 	{ "knock_delay",	CF_TIME,  NULL, 0, &ConfigChannel.knock_delay		},
 	{ "knock_delay_channel",CF_TIME,  NULL, 0, &ConfigChannel.knock_delay_channel	},
 	{ "max_bans",		CF_INT,   NULL, 0, &ConfigChannel.max_bans		},
 	{ "max_bans_large",	CF_INT,   NULL, 0, &ConfigChannel.max_bans_large	},
+	{ "max_chans_per_user", CF_INT,   NULL, 0, &ConfigChannel.max_chans_per_user 	},
+	{ "no_create_on_split", CF_YESNO, NULL, 0, &ConfigChannel.no_create_on_split 	},
+	{ "no_join_on_split",	CF_YESNO, NULL, 0, &ConfigChannel.no_join_on_split	},
 	{ "only_ascii_channels", CF_YESNO, NULL, 0, &ConfigChannel.only_ascii_channels },
-	{ "use_quiet",		CF_YESNO, NULL, 0, &ConfigChannel.use_quiet		},
 	{ "use_except",		CF_YESNO, NULL, 0, &ConfigChannel.use_except		},
 	{ "use_invex",		CF_YESNO, NULL, 0, &ConfigChannel.use_invex		},
 	{ "use_forward",	CF_YESNO, NULL, 0, &ConfigChannel.use_forward		},
-	{ "global_chantypes",	CF_QSTRING, conf_set_network_globalchan, 0, NULL	},
-	{ "local_chantypes",	CF_QSTRING, conf_set_network_localchan, 0, NULL	},
-	{ "modeless_chantypes",	CF_QSTRING, conf_set_network_modeless, 0, NULL	},
-	{ "modes_disabled_for_halfops",	CF_QSTRING, conf_set_network_nohalfops, 0, NULL	},
-	{ "prefix_operbiz",	CF_QSTRING, conf_set_network_operprefix, 0, NULL	},
-	{ "prefix_owner",	CF_QSTRING, conf_set_network_qprefix, 0, NULL	},
-	{ "prefix_admin",	CF_QSTRING, conf_set_network_aprefix, 0, NULL	},
-	{ "prefix_halfop",	CF_QSTRING, conf_set_network_hprefix, 0, NULL	},
-	{ "burst_away",		CF_YESNO, NULL, 0, &ConfigFileEntry.burst_away		},
-	{ "hide_certfp",		CF_YESNO, NULL, 0, &ConfigFileEntry.hide_certfp		},
+	{ "use_knock",		CF_YESNO, NULL, 0, &ConfigChannel.use_knock		},
+	{ "resv_forcepart",     CF_YESNO, NULL, 0, &ConfigChannel.resv_forcepart	},
 	{ "channel_target_change", CF_YESNO, NULL, 0, &ConfigChannel.channel_target_change	},
 	{ "disable_local_channels", CF_YESNO, NULL, 0, &ConfigChannel.disable_local_channels },
 	{ "autochanmodes",	CF_QSTRING, conf_set_channel_autochanmodes, 0, NULL	},
-	{ "modelessmodes",	CF_QSTRING, conf_set_channel_modelessmodes, 0, NULL	},
 	{ "displayed_usercount",	CF_INT, NULL, 0, &ConfigChannel.displayed_usercount	},
-	{ "certfp_method",	CF_STRING, conf_set_general_certfp_method, 0, NULL },
 	{ "\0", 		0, 	  NULL, 0, NULL }
 };
 
@@ -2798,8 +2602,6 @@ newconf_init()
 	add_conf_item("listen", "defer_accept", CF_YESNO, conf_set_listen_defer_accept);
 	add_conf_item("listen", "port", CF_INT | CF_FLIST, conf_set_listen_port);
 	add_conf_item("listen", "sslport", CF_INT | CF_FLIST, conf_set_listen_sslport);
-	add_conf_item("listen", "sctpport", CF_INT | CF_FLIST, conf_set_listen_sctpport);
-	add_conf_item("listen", "sctpsslport", CF_INT | CF_FLIST, conf_set_listen_sctpsslport);
 	add_conf_item("listen", "ip", CF_QSTRING, conf_set_listen_address);
 	add_conf_item("listen", "host", CF_QSTRING, conf_set_listen_address);
 
@@ -2819,7 +2621,7 @@ newconf_init()
 	add_conf_item("cluster", "flags", CF_STRING | CF_FLIST, conf_set_cluster_flags);
 
 	add_top_conf("general", NULL, NULL, conf_general_table);
-	add_top_conf("network", NULL, NULL, conf_network_table);
+	add_top_conf("channel", NULL, NULL, conf_channel_table);
 	add_top_conf("serverhide", NULL, NULL, conf_serverhide_table);
 
 	add_top_conf("service", NULL, NULL, NULL);
@@ -2828,13 +2630,16 @@ newconf_init()
 	add_top_conf("alias", conf_begin_alias, conf_end_alias, NULL);
 	add_conf_item("alias", "name", CF_QSTRING, conf_set_alias_name);
 	add_conf_item("alias", "target", CF_QSTRING, conf_set_alias_target);
-	add_conf_item("alias", "prefix", CF_QSTRING, conf_set_alias_prefix);
+
+	add_top_conf("fakechannel", conf_begin_fakechannel, conf_end_fakechannel, NULL);
+	add_conf_item("fakechannel", "name", CF_QSTRING, conf_set_fakechannel_name);
+	add_conf_item("fakechannel", "topic", CF_QSTRING, conf_set_fakechannel_topic);
+	add_conf_item("fakechannel", "users_max", CF_INT, conf_set_fakechannel_users_max);
+	add_conf_item("fakechannel", "users_min", CF_INT, conf_set_fakechannel_users_min);
 
 	add_top_conf("blacklist", NULL, NULL, NULL);
 	add_conf_item("blacklist", "host", CF_QSTRING, conf_set_blacklist_host);
 	add_conf_item("blacklist", "type", CF_STRING | CF_FLIST, conf_set_blacklist_type);
 	add_conf_item("blacklist", "matches", CF_QSTRING | CF_FLIST, conf_set_blacklist_matches);
-	add_conf_item("blacklist", "reject", CF_INT, conf_set_blacklist_reject);
-	add_conf_item("blacklist", "mark", CF_QSTRING, conf_set_blacklist_mark);
-	add_conf_item("blacklist", "reason", CF_QSTRING, conf_set_blacklist_reason);
+	add_conf_item("blacklist", "reject_reason", CF_QSTRING, conf_set_blacklist_reason);
 }

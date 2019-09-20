@@ -253,7 +253,7 @@ static int
 build_target_list(enum message_type msgtype, struct Client *client_p,
 		  struct Client *source_p, const char *nicks_channels, const char *text)
 {
-	int type, aleast;
+	int type;
 	char *p, *nick, *target_list;
 	struct Channel *chptr = NULL;
 	struct Client *target_p;
@@ -270,10 +270,10 @@ build_target_list(enum message_type msgtype, struct Client *client_p,
 		 * here plain old channel msg?
 		 */
 
-		if(IsChannelName(nick))
+		if(IsChanPrefix(*nick))
 		{
 			/* ignore send of local channel to a server (should not happen) */
-			if(IsServer(client_p) && ChannelIsLocal(nick))
+			if(IsServer(client_p) && *nick == '&')
 				continue;
 
 			if((chptr = find_channel(nick)) != NULL)
@@ -326,26 +326,16 @@ build_target_list(enum message_type msgtype, struct Client *client_p,
 
 		type = 0;
 		with_prefix = nick;
-		/*  allow @qaohv. (and without a dot... unless the channel has a dot) if someone wants to do that */
-		if (*nick == '@') {
+		/*  allow %+@ if someone wants to do that */
+		for(;;)
+		{
+			if(*nick == '@')
+				type |= CHFL_CHANOP;
+			else if(*nick == '+')
+				type |= CHFL_CHANOP | CHFL_VOICE;
+			else
+				break;
 			nick++;
-			for(;;)
-			{
-				if(*nick == 'o')
-					type |= CHFL_MANAGER | CHFL_SUPEROP | CHFL_CHANOP;
-				else if(*nick == 'q')
-					type |= CHFL_MANAGER;
-				else if(*nick == 'a')
-					type |= CHFL_MANAGER | CHFL_SUPEROP;
-				else if(*nick == 'h')
-					type |= CHFL_MANAGER | CHFL_SUPEROP | CHFL_CHANOP | CHFL_HALFOP;
-				else if(*nick == 'v')
-					type |= CHFL_MANAGER | CHFL_SUPEROP | CHFL_CHANOP | CHFL_HALFOP | CHFL_VOICE;
-				else
-					break;
-				nick++;
-			}
-			if (!IsChannelName(nick) || *nick == '.') nick++;
 		}
 
 		if(type != 0)
@@ -399,7 +389,7 @@ build_target_list(enum message_type msgtype, struct Client *client_p,
 			continue;
 		}
 
-		if(IsServer(client_p) && *nick == '=' && IsChannelName(nick+1))
+		if(IsServer(client_p) && *nick == '=' && nick[1] == '#')
 		{
 			nick++;
 			if((chptr = find_channel(nick)) != NULL)
@@ -522,8 +512,6 @@ msg_channel(enum message_type msgtype,
 		return;
 	}
 
-	struct membership *msptr = find_channel_membership(chptr, source_p);
-
 	/* chanops and voiced can flood their own channel with impunity */
 	if((result = can_send(chptr, source_p, NULL)))
 	{
@@ -538,12 +526,6 @@ msg_channel(enum message_type msgtype,
 		if(result == CAN_SEND_OPV ||
 		   !flood_attack_channel(msgtype, source_p, chptr, chptr->chname))
 		{
-			if (is_delayed(msptr)) {
-				// User is member of channel. Undelay them if they can speak.
-				msptr->flags &= ~CHFL_DELAY;
-				send_channel_join(0, chptr, source_p);
-			}
-
 			sendto_channel_flags(client_p, ALL_MEMBERS, source_p, chptr,
 					     "%s %s :%s", cmdname[msgtype], chptr->chname, text);
 		}
@@ -657,27 +639,12 @@ msg_channel_flags(enum message_type msgtype, struct Client *client_p,
 	if(flags & CHFL_VOICE)
 	{
 		type = ONLY_CHANOPSVOICED;
-		c = 'v';
-	}
-	else if (flags & CHFL_HALFOP)
-	{
-		type = ONLY_CHANOPS|CHFL_HALFOP;
-		c = 'h';
-	}
-	else if (flags & CHFL_CHANOP)
-	{
-		type = ONLY_CHANOPS;
-		c = 'o';
-	}
-	else if (flags & CHFL_SUPEROP)
-	{
-		type = CHFL_SUPEROP|CHFL_MANAGER;
-		c = 'a';
+		c = '+';
 	}
 	else
 	{
-		type = CHFL_MANAGER;
-		c = 'q';
+		type = ONLY_CHANOPS;
+		c = '@';
 	}
 
 	if(MyClient(source_p))
@@ -710,19 +677,8 @@ msg_channel_flags(enum message_type msgtype, struct Client *client_p,
 		return;
 	}
 
-	// This is a conundrum.
-
-	// send "@#channel" on local, prefix msg with "(+modeletter)"
-	// this is a hack. we might add a CAP for this.
-	sendto_channel_local(type, chptr, !IsServer(source_p) ? ":%s!%s@%s %s @%s :(+%c) %s" : ":%s%s%s %s @%s :(+%c) %s",
-				source_p->name, !IsServer(source_p) ? source_p->username : "",
-				!IsServer(source_p) ? source_p->host : "", cmdname[msgtype], chptr->chname,
-				c, text
-			     );
-
-	// send "@modeletter.#channel" remote
-	sendto_server(client_p, chptr, 0, 0, ":%s %s @%c.%s :%s",
-			     use_id(source_p), cmdname[msgtype], c, chptr->chname, text);
+	sendto_channel_flags(client_p, type, source_p, chptr, "%s %c%s :%s",
+			     cmdname[msgtype], c, chptr->chname, text);
 }
 
 static void
@@ -766,11 +722,10 @@ msg_client(enum message_type msgtype,
 	if(MyClient(source_p))
 	{
 		/*
-		 * YYY: Controversial? Allow target users to send replies
+		 * XXX: Controversial? Allow target users to send replies
 		 * through a +g.  Rationale is that people can presently use +g
 		 * as a way to taunt users, e.g. harass them and hide behind +g
 		 * as a way of griefing.  --nenolod
-		 * Resolved by ellenor@umbrellix.net as not controversial.
 		 */
 		if(msgtype != MESSAGE_TYPE_NOTICE &&
 				(IsSetCallerId(source_p) ||
@@ -850,7 +805,7 @@ msg_client(enum message_type msgtype,
 		/* buffer location may have changed. */
 		text = hdata.text;
 
-		if (hdata.approved != 0 && hdata.approved != UMODE_CALLERID)
+		if (hdata.approved != 0)
 			return;
 
 		if (EmptyString(text))
@@ -863,13 +818,11 @@ msg_client(enum message_type msgtype,
 		}
 
 		/* XXX Controversial? allow opers always to send through a +g */
-		if(!IsServer(source_p) && !IsService(source_p) &&
-			((IsSetCallerId(target_p) || (IsSetRegOnlyMsg(target_p) && !source_p->user->suser[0])) ||
-		   	(hdata.approved == UMODE_CALLERID))
-		  )
+		if(!IsServer(source_p) && (IsSetCallerId(target_p) ||
+					(IsSetRegOnlyMsg(target_p) && !source_p->user->suser[0])))
 		{
 			/* Here is the anti-flood bot/spambot code -db */
-			if(accept_message(source_p, target_p))
+			if(accept_message(source_p, target_p) || IsOper(source_p))
 			{
 				add_reply_target(target_p, source_p);
 				sendto_one(target_p, ":%s!%s@%s %s %s :%s",
@@ -889,38 +842,23 @@ msg_client(enum message_type msgtype,
 				/* check for accept, flag recipient incoming message */
 				if(msgtype != MESSAGE_TYPE_NOTICE)
 				{
-					if (!(hdata.approved == UMODE_CALLERID))
-						sendto_one_numeric(source_p, ERR_TARGUMODEG,
-								   form_str(ERR_TARGUMODEG),
-								   target_p->name);
-					else	sendto_one_numeric(source_p, ERR_TARGUMODEG,
-								   vform_str(ERR_TARGUMODEG, 3),
-								   target_p->name, hdata.whynot.mode, hdata.whynot.umode);
+					sendto_one_numeric(source_p, ERR_TARGUMODEG,
+							   form_str(ERR_TARGUMODEG),
+							   target_p->name);
 				}
 
 				if((target_p->localClient->last_caller_id_time +
 				    ConfigFileEntry.caller_id_wait) < rb_current_time())
 				{
-					if(msgtype != MESSAGE_TYPE_NOTICE) {
-						if (!(hdata.approved == UMODE_CALLERID))
-							sendto_one_numeric(source_p, RPL_TARGNOTIFY,
-									   form_str(RPL_TARGNOTIFY),
-									   target_p->name);
-						else
-							sendto_one_numeric(source_p, RPL_TARGNOTIFY,
-									   vform_str(RPL_TARGNOTIFY, 3),
-									   target_p->name, hdata.whynot.targnotify);
-					}
+					if(msgtype != MESSAGE_TYPE_NOTICE)
+						sendto_one_numeric(source_p, RPL_TARGNOTIFY,
+								   form_str(RPL_TARGNOTIFY),
+								   target_p->name);
 
 					add_reply_target(target_p, source_p);
-					if (!(hdata.approved == UMODE_CALLERID))
-						sendto_one(target_p, form_str(RPL_UMODEGMSG),
-							   me.name, target_p->name, source_p->name,
-							   source_p->username, source_p->host);
-					else
-						sendto_one(target_p, vform_str(RPL_UMODEGMSG, 3),
-							   me.name, target_p->name, source_p->name,
-							   source_p->username, source_p->host, hdata.whynot.mode, hdata.whynot.umode);
+					sendto_one(target_p, form_str(RPL_UMODEGMSG),
+						   me.name, target_p->name, source_p->name,
+						   source_p->username, source_p->host);
 
 					target_p->localClient->last_caller_id_time = rb_current_time();
 				}

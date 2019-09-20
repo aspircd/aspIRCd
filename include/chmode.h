@@ -36,25 +36,39 @@
 
 extern int chmode_flags[256];
 
-#define CHM_PROTOTYPE	(struct Client *source_p, struct Channel *chptr, \
-	   int alevel, int parc, int *parn, \
+extern void chm_nosuch(struct Client *source_p, struct Channel *chptr,
+	   int alevel, int parc, int *parn,
 	   const char **parv, int *errors, int dir, char c, long mode_type);
-
-extern void chm_nosuch CHM_PROTOTYPE
-extern void chm_orphaned CHM_PROTOTYPE
-extern void chm_simple CHM_PROTOTYPE
-extern void chm_ban CHM_PROTOTYPE
-extern void chm_staff CHM_PROTOTYPE
-extern void chm_forward CHM_PROTOTYPE
-extern void chm_throttle CHM_PROTOTYPE
-extern void chm_key CHM_PROTOTYPE
-extern void chm_limit CHM_PROTOTYPE
-extern void chm_op CHM_PROTOTYPE
-extern void chm_halfop CHM_PROTOTYPE
-extern void chm_superop CHM_PROTOTYPE
-extern void chm_manager CHM_PROTOTYPE
-extern void chm_operbiz CHM_PROTOTYPE
-extern void chm_voice CHM_PROTOTYPE
+extern void chm_orphaned(struct Client *source_p, struct Channel *chptr,
+	   int alevel, int parc, int *parn,
+	   const char **parv, int *errors, int dir, char c, long mode_type);
+extern void chm_simple(struct Client *source_p, struct Channel *chptr,
+	   int alevel, int parc, int *parn,
+	   const char **parv, int *errors, int dir, char c, long mode_type);
+extern void chm_ban(struct Client *source_p, struct Channel *chptr,
+	   int alevel, int parc, int *parn,
+	   const char **parv, int *errors, int dir, char c, long mode_type);
+extern void chm_staff(struct Client *source_p, struct Channel *chptr,
+	   int alevel, int parc, int *parn,
+	   const char **parv, int *errors, int dir, char c, long mode_type);
+extern void chm_forward(struct Client *source_p, struct Channel *chptr,
+	   int alevel, int parc, int *parn,
+	   const char **parv, int *errors, int dir, char c, long mode_type);
+extern void chm_throttle(struct Client *source_p, struct Channel *chptr,
+	   int alevel, int parc, int *parn,
+	   const char **parv, int *errors, int dir, char c, long mode_type);
+extern void chm_key(struct Client *source_p, struct Channel *chptr,
+	   int alevel, int parc, int *parn,
+	   const char **parv, int *errors, int dir, char c, long mode_type);
+extern void chm_limit(struct Client *source_p, struct Channel *chptr,
+	   int alevel, int parc, int *parn,
+	   const char **parv, int *errors, int dir, char c, long mode_type);
+extern void chm_op(struct Client *source_p, struct Channel *chptr,
+	   int alevel, int parc, int *parn,
+	   const char **parv, int *errors, int dir, char c, long mode_type);
+extern void chm_voice(struct Client *source_p, struct Channel *chptr,
+	   int alevel, int parc, int *parn,
+	   const char **parv, int *errors, int dir, char c, long mode_type);
 
 extern unsigned int cflag_add(char c, ChannelModeFunc function);
 extern void cflag_orphan(char c);

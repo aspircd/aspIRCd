@@ -63,7 +63,7 @@
 #  error Incorrect config.h for this revision of ircd.
 #endif
 
-#define HOSTLEN         76	/* Length of hostname.  Updated to         */
+#define HOSTLEN         63	/* Length of hostname.  Updated to         */
 				/* comply with RFC1123                     */
 
 #define USERLEN         10

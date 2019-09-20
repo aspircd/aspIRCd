@@ -36,12 +36,8 @@ struct Blacklist {
 	int ipv4;	/* Does this blacklist support IPv4 lookups? */
 	int ipv6;	/* Does this blacklist support IPv6 lookups? */
 	char host[IRCD_RES_HOSTLEN + 1];
-	char mark[NICKLEN + 1];
 	rb_dlink_list filters;	/* Filters for queries */
-	int reject; // if 0, client will be sent a notice that they are listed, and will be marked, but not rejected
-	// since a client can be on multiple dnsbls, the marks will pile up under METADATA DNSBL, which will be
-	// treated sort of like privilegesets in how they are processed
-	char reject_reason[IRCD_BUFSIZE]; // "reason" will be the mark given in metadata dnsbl:mark. and sent to user
+	char reject_reason[IRCD_BUFSIZE];
 	unsigned int hits;
 	time_t lastwarning;
 };
@@ -51,7 +47,6 @@ struct BlacklistClient {
 	struct Blacklist *blacklist;
 	struct Client *client_p;
 	struct DNSQuery dns_query;
-	char *replycode;
 	rb_dlink_node node;
 };
 
@@ -63,7 +58,7 @@ struct BlacklistFilter {
 };
 
 /* public interfaces */
-struct Blacklist *new_blacklist(char *host, char *reject_reason, int ipv4, int ipv6, rb_dlink_list *filters, int reject, char *mark);
+struct Blacklist *new_blacklist(char *host, char *reject_reason, int ipv4, int ipv6, rb_dlink_list *filters);
 void lookup_blacklists(struct Client *client_p);
 void abort_blacklist_queries(struct Client *client_p);
 void unref_blacklist(struct Blacklist *blptr);

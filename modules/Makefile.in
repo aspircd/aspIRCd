@@ -47,7 +47,6 @@ CORE_SRCS = \
   core/m_kick.c \
   core/m_kill.c \
   core/m_message.c \
-  core/m_metadata.c \
   core/m_mode.c \
   core/m_nick.c \
   core/m_part.c \
@@ -58,7 +57,6 @@ CORE_SRCS = \
 TSRCS =                          \
   chm_nocolour.c \
   chm_noctcp.c \
-  chm_nonotice.c \
   m_accept.c \
   m_admin.c \
   m_away.c \
@@ -73,8 +71,6 @@ TSRCS =                          \
   m_dline.c \
   m_encap.c \
   m_etrace.c \
-  m_force.c \
-  m_grant.c \
   m_help.c \
   m_info.c \
   m_invite.c \

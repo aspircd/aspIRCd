@@ -1,260 +1,68 @@
-MODE <channel> <+|-><modes> <parameters as required>
+MODE <channel> <+|-><modes> [parameters]
 
-In the MXS column,
-y designates that the channel mode is oper only and can be set by
-  any IRCop in the channel
-O designates that the channel mode may only be set through services
-  or by IRCops.
-S designates that the channel mode is services only.
-q designates that the mode may be set only by channel owners.
-a designates that the mode may be set only by channel superops.
-o designates that the mode may be set by any channel operator.
-h designates that the mode may be set by any channel halfoperator,
-  except where disabled in the configuration file - then it reverts
-  to chanop.
-+ designates that the mode is an extension and may be entirely
-  unavailable on this network.
-! designates that to set the mode requires a parameter.
-~ designates that to unset the mode requires the mode's parameter.
-L designates that the mode is a list mode. implies !~.
-K designates that the mode is a key mode. implies !~
+? designates that the cmode is provided by an extension
+and may not be present on this server.
+ 
+CHANNELMODE - DESCRIPTION
+------------------------------------------------------------------------
+NO PARAMETERS:
+     +n     - No external messages.  Only channel members may talk in
+              the channel.
+     +t     - Ops Topic.  Only opped (+o) users may set the topic.
+     +s     - Secret.  Channel will not be shown in /whois and /list etc.
+     +p     - Private.  Disables /knock to the channel.
+     +m     - Moderated.  Only opped/voiced users may talk in channel.
+     +i     - Invite only.  Users need to be invited or match a +I to
+              join the channel.
+     +r     - Registered users only.  Only users identified to services
+              may join.
+     +c     - No color.  All markup (color, bold, underline, etc.) in
+              messages is stripped.
+     +g     - Free invite.  Everyone may invite users.  Significantly
+              weakens +i control.
+     +z     - Op moderated.  Messages blocked by +m, +b and +q are instead
+              sent to ops.
+     +L     - Large ban list.  Increase maximum number of +beIq entries.
+              Only settable by opers.
+     +P     - Permanent.  Channel does not disappear when empty.  Only
+              settable by opers.
+     +F     - Free target.  Anyone may set forwards to this (otherwise
+              ops are necessary).
+     +Q     - Disable forward.  Users cannot be forwarded to the channel
+              (however, new forwards can still be set subject to +F).
+     +C     - Disable CTCP. All CTCP messages to the channel, except ACTION,
+              are disallowed.
+  ?  +O     - IRC Operator only channel.
+  ?  +A     - IRC server administrator only channel.
+  ?  +T     - No NOTICEs allowed in the channel.
+  ?  +S     - Only users connected via SSL/TLS may join the channel while this 
+              mode is set. Users already in the channel are not affected.
 
-ML = mode letter
-XL = extban letter
-
-.----------------------------------------------------------------------.
-| ML | MXS | DESCRIPTION                                               |
-|----+-----+-----------------------------------------------------------|
-| +D | h   | Delayed joins; Undernet auditorium mode. Users who join
-|    |     | are not shown to join until they speak, or are voiced,
-|    |     | kicked, opped, what have you.
-|----+-----+-----------------------------------------------------------|
-| +F | h   | Free target; this channel may be a recipient of forwards
-|    |     | set by people who are not ops on it.
-|----+-----+-----------------------------------------------------------|
-| +Q | h   | Disallow forwards; may not receive forwards (new forwards
-|    |     | may be set subject to +F and ops, but will not be         |
-|    |     | honored)
-|----+-----+-----------------------------------------------------------|
-| +R | h   | Registered-only; moved from +r in charybdis. Only users
-|    |     | with an account set by services may join the channel.
-|----+-----+-----------------------------------------------------------|
-| +U | h+  | Registered/moderated: only users with an account set by   |
-|    |     | services may speak in the channel. May be implemented as  |
-|    |     | transition to a +q or not at all.                         +
-|----+-----+-----------------------------------------------------------|
-| +X | O   | Extended list mode limit; the channel may have a higher   |
-|    |     | count of list modes than a regular channel. Or lower,     |
-|    |     | depending on server configuration. Usually higher though. |
-|----+-----+-----------------------------------------------------------|
-| +u | h   | opmoderate; the channel's quieted, banned and +m users    |
-|    |     | may send to the channel, but it only goes to ops.         |
-|    |     | if memory serves, you should disable this for halfops if  |
-|    |     | you run the server.                                       |
-|----+-----+-----------------------------------------------------------|
-| +n | h   | no external messages; you have to be in the channel to    |
-|    |     | message it. This is a no brainer to leave set; on         |
-|    |     | that don't have it, spammers may connect, message and     |
-|    |     | quit without ever showing up, complicating channel rule   |
-|    |     | enforcement.                                              |
-|----+-----+-----------------------------------------------------------|
-| +t | h   | Topic lock for non-privileged users. Most channels will   |
-|    |     | want this set; it's advised to leave unset in the mode-   |
-|    |     | less channel profile, but modeless channels on IRCNet     |
-|    |     | behave as if this mode is set. It prevents users with     |
-|    |     | privileges under halfop from changing the topic.          |
-|----+-----+-----------------------------------------------------------|
-| +k | Kh  | Channel key. This is a "lock" mode. That means that once  |
-|    |     | set, you need the parameter of the mode to join.          |
-|    |     | /mode #channel +k key1                                    |
-|    |     | /join #channel -- fails with error "wrong key"            |
-|    |     | /join #channel key1                                       |
-|    |     | This is not a list mode. Only one channel key may exist   |
-|    |     | at once for a channel.                                    |
-|----+-----+-----------------------------------------------------------|
-| +l | !h  | Channel user limit. If the channel has at least <para-    |
-|    |     | meter> users, deny further entry except as dictated by an |
-|    |     | SVSJOIN or an op-conducted /INVITE.                       |
-|----+-----+-----------------------------------------------------------|
-| +g | h   | Users may invite. Weakens most restrictive modes.         |
-|    |     | With +g, any user in the channel may run an invite.       |
-|----+-----+-----------------------------------------------------------|
-| +i | h   | Invite only. The channel may only be joined on invite, or |
-|    |     | pursuant to a mask or ext match in /MODE +I (not normally |
-|    |     | visible).                                                 |
-|----+-----+-----------------------------------------------------------|
-| +b | hL  | Banish.                                                   |
-| +e | hL  | Exempt from banish.                                       |
-| +I | hL  | Automatically invited.                                    |
-| +M | hL  | Forbidden from speaking but not banished. (mask Moderate) |
-|    |     | These are the main list modes. /mode +bM are publically   |
-|    |     | viewable, but +eI are not. All may be disabled for        |
-|    |     | halfops to use but not view.                              |
-|    |     | As banlist modes, these modes use banmatch code, which    |
-|    |     | accepts extended masks, all of which are extensions not   |
-|    |     | loaded by default. See the second table in this file for  |
-|    |     | more information.                                         |
-|    |     | An extban will be the format $X:parm, where X is the ext- |
-|    |     | ban character, and parm is the parameter. With no para-   |
-|    |     | meter, it is just $X.                                     |
-|    |     | /mode #channel +b *!*@bad.host                            |
-|    |     | /mode #channel +eI *!goodident@bad.host steve*!*@*        |
-|    |     | /mode #channel +M *!*@listen.only                         |
-|    |     | Ban *!*@bad.host altogether.
-|    |     | But: allow *!goodident@bad.host to puncture +bM, and      |
-|    |     | allow nicks starting with steve to puncture +i.           |
-|    |     | Forbid *!*@listen.only from speaking.                     |
-|    |     | (with extban ssl_fp loaded: )                             |
-|    |     | /mode #channel +I $z:SSLFPOFUSERYOUTRUST25983dx32         |
-|----+-----+-----------------------------------------------------------|
-| +y | y!~ | Oper in channel on official business.                     |
-| +q | q!~ | Channel owner. May not be kicked by +aoh.                 |
-| +a | a!~ | Channel superoperator. May not be kicked by +oh.          |
-| +o | o!~ | Channel operator. May not be kicked by +h.                |
-| +h | h!~ | Channel operator with limited privileges. May be kicked   |
-|    |     | by any user with the power to kick, except as prescribed  |
-|    |     | by the network's configuration (if +h is disabled for     |
-|    |     | halfops, halfops may not kick other halfops               |
-| +v | h!~ | The power to speak past a mute, ban or moderation.        |
-|    |     | These are modes providing power. +y does not provide any  |
-|    |     | power over users in the channel but it elevates the       |
-|    |     | position of the holder above even the owner in the nick-  |
-|    |     | list. Any oper may set +y on any other oper, but not on a |
-|    |     | regular user.                                             |
-|    |     | Receiving one of these modes unhides you from the nick-   |
-|    |     | list in +D channels.                                      |
-|----+-----+-----------------------------------------------------------|
-| +p | h   | Channel is "private". While shown in global /NAMES and    |
-|    |     | /LIST, its name is hidden. Essentially superseded by +s,  |
-|    |     | but both may be set at once.                              |
-|----+-----+-----------------------------------------------------------|
-| +s | h   | Channel is "secret". Unless you know the exact name of    |
-|    |     | the channel, new phone who dis? The IRCD pretends it does |
-|    |     | not know the channel exists unless you prove it does with |
-|    |     | an exact name.                                            |
-|----+-----+-----------------------------------------------------------|
-| +r | O   | Channel has been registered with services supporting +r.  |
-|    |     | A channel with this mode will not be destroyed by the     |
-|    |     | IRCd when it falls empty. This obviates the need for any  |
-|    |     | channel protection bot from CService, lightening the load |
-|    |     | on the services program.                                  |
-|----+-----+-----------------------------------------------------------|
-| +m | h   | Channel is moderated. Unless +u is set, people with less  |
-|    |     | than +v privilege cannot speak at all. If +u is set, a    |
-|    |     | user with less than +v privilege may still speak, but the |
-|    |     | messages they send will be routed to chanops only.        |
-|----+-----+-----------------------------------------------------------|
-| +A | O+h | Channel may only be joined by IRC server administrators.  |
-| +O | O+h | Channel may only be joined by IRC operators.              |
-|----+-----+-----------------------------------------------------------|
-| +S | h+  | Channel may only be joined by users using SSL. May be     |
-|    |     | implemented as an adaptor to +b or not at all.            |
-'----------------------------------------------------------------------'
-
-.----------------------------------------------------------------------.
-| XL | Description                                                     |
-|----+-----------------------------------------------------------------|
-| $a | Without parameter, matches any logged in user.                  |
-|    | With parameter, matches a user with a login matching the mask   |
-|    | that is the parameter. e.g. $a:ellenor matches the login        |
-|    | ellenor in any case. $a:ellenor* matches any login beginning    |
-|    | with ellenor.                                                   |
-|----+-----------------------------------------------------------------|
-| $j | Requires parameter. Matches any user who is banned in the       |
-|    | channel whose name is the parameter. e.g. $j:#lounge matches    |
-|    | any user banned in #lounge.                                     |
-|----+-----------------------------------------------------------------|
-| $c | Requires parameter. Matches any user who is joined to the       |
-|    | channel whose name is the parameter. e.g. $c:#lounge matches    |
-|    | anyone who is in #lounge. Generally seen as capricious and      |
-|    | immature, à la "co-channeling" bots on nets like Undernet.      |
-|----+-----------------------------------------------------------------|
-|    | I'll just quote the source code...                              |
-| $& | Extban that combines other extbans (AND operator).              |
-| $| | Extban that combines other extbans (OR operator).               |
-| $m | Normal ban matching implemented as an extban.                   |
-|    | These three can be used, along with the other types, to create  |
-|    | powerful new types of restriction (e.g. ban any user who is     |
-|    | unidentified and carries a DNSBL mark)                          |
-|    |                                                                 |
-|    | Basic example:                                                  |
-|    | $&:~a,m:*!*@gateway/web/cgi-irc*                                |
-|    | Which means: match unidentified webchat users.                  |
-|    |                                                                 |
-|    | More complicated example:                                       |
-|    | $&:~a,|:(m:*!*@gateway/web/foo,m:*!*@gateway/web/bar)           |
-|    | Which means: unidentified and using the foo or bar gateway.     |
-|    |                                                                 |
-|    | Rules:                                                          |
-|    |                                                                 |
-|    | - Optional pair of parens around data.                          |
-|    |                                                                 |
-|    | - component bans are separated by commas, but commas between    |
-|    |   matching pairs of parens are skipped.                         |
-|    |                                                                 |
-|    | - Unbalanced parens are an error.                               |
-|    |                                                                 |
-|    | - Parens, commas and backslashes can be escaped by backslashes. |
-|    |                                                                 |
-|    | - A backslash before any character other than a paren or        |
-|    |   backslash is just a backslash (backslash and character are    |
-|    |   both used).                                                   |
-|    |                                                                 |
-|    | - Non-existant extbans are invalid.                             |
-|    |   This is primarily for consistency with non-combined bans:     |
-|    |   the ircd does not let you set +b $f unless the 'f' extban is  |
-|    |   loaded, so setting $&:f should be impossible too.             |
-|    |                                                                 |
-|    | Issues:                                                         |
-|    |                                                                 |
-|    | - Backslashes double inside nested bans.                        |
-|    |   Hopefully acceptable because they should be rare.             |
-|    |                                                                 |
-|    | - Is performance good enough?                                   |
-|    |   I suspect it is, but have done no load testing.               |
-|----+-----------------------------------------------------------------|
-| $x | Extensive ban type: normal matching implemented as an extban,   |
-|    | except that instead of matching on nick!user@host, it matches   |
-|    | on nick!user@host#gecos.                                        |
-|----+-----------------------------------------------------------------|
-| $o | Matches opers. Parameter is opertype, but this is useless on    |
-|    | networks making use of the ENCAP * GRANT feature.               |
-|----+-----------------------------------------------------------------|
-| $r | GECOS ban type: normal matching ONLY on gecos.                  |
-|    | Is only usable for +bM - forbidden for +eI.                     |
-|----+-----------------------------------------------------------------|
-| $t | SCTP ban type: matches any user connected to the network by a   |
-|    | transport layer other than TCP or TLS/TCP. Does not match Tor   |
-|    | or i2p, as these are TCP connections.                           |
-|----+-----------------------------------------------------------------|
-| $s | Server ban type: matches any user connected to the network via  |
-|    | a server matching the mask that is the parameter. Obviously     |
-|    | requires a parameter. Considered unsafe for +eI - this is a BUG |
-|    | that should be remedied soon, but was introduced intentionally. |
-|----+-----------------------------------------------------------------|
-| $z | (New version) Matches any SSL user, OR with parameter, matches  |
-|    | any SSL user with a certificate whose fingerprint matches       |
-|    | the fingerprint specified as parameter to the extban.           |
-|    | (Old version) Same as new, but does not accept parameter.       |
-|----+-----------------------------------------------------------------|
-| $u | Usermode match: matches users with a given usermode. Could      |
-|    | be used to enforce "no PM without permission" by banning users  |
-|    | set -g (+b $u:-g), or to quiet users who use +D (+M $u:+D)      |
-|    | or to allow opers to join through bans (+e $u:+o) or to effect- |
-|    | ively have +A (+b $u:-a). Or to ban SCTP users (+b $u:+T).      |
-|    | Or to ban bots (+b $u:+B).                                      |
-|----+-----------------------------------------------------------------|
-| $w | WebIRC type match: matches users coming on from a certain gate- |
-|    | way. This match is a carryover from the historical PitIRCd that |
-|    | set METADATA WEBIRCNAME on WebIRC users with a known webirc     |
-|    | gateway name. irca still does this, and in webirc client WHOIS  |
-|    | you will see "is using the <name> gateway" or similar.          |
-|----+-----------------------------------------------------------------|
-| $d | DNSBL mark match: matches users carrying a DNSBL stigma. Most   |
-|    | channels will choose to use this for discrimination.            |
-|    | Takes a parameter - the name of a DNSBL stigma to match on.     |
-'----------------------------------------------------------------------'
-
-Any extban's letter may be preceded with a tilde to invert the match.
-
-$z is opposite to $~z for example.
+WITH PARAMETERS:
+     +f     - Forward.  Forwards users who cannot join because of +i,
+              +j, +l or +r.
+              PARAMS: /mode #channel +f #channel2
+     +j     - Join throttle.  Limits number of joins to the channel per time.
+              PARAMS: /mode #channel +j count:time
+     +k     - Key.  Requires users to issue /join #channel KEY to join.
+              PARAMS: /mode #channel +k key
+     +l     - Limit.  Impose a maximum number of LIMIT people in the channel.
+              PARAMS: /mode #channel +l limit
+     +v     - Voice.  Allows a user to talk in a +m channel.  Noted by +nick.
+              PARAMS: /mode #channel +v nick
+     +o     - Op.  Allows a user full control over the channel.
+              PARAMS: /mode #channel +o nick
+     +b     - Ban.  Prevents a user from entering the channel, and from
+              sending or changing nick if they are on it, based on a 
+              nick!ident@host match.
+              PARAMS: /mode #channel +b nick!user@host
+     +q     - Quiet.  Prevents a user from sending to the channel or changing
+              nick, based on a nick!ident@host match.
+              PARAMS: /mode #channel +q nick!user@host
+     +e     - Exempt.  Allows a user to join a channel and send to it even if
+              they are banned (+b) or quieted (+q), based on a nick!ident@host
+              match.
+              PARAMS: /mode #channel +e nick!user@host
+     +I     - Invite Exempt.  Allows a user to join a +i channel without an 
+              invite, based on a nick!user@host match.
+              PARAMS: /mode #channel +I nick!user@host

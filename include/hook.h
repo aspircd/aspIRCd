@@ -25,6 +25,7 @@ extern int h_burst_finished;
 extern int h_server_introduced;
 extern int h_server_eob;
 extern int h_client_exit;
+extern int h_after_client_exit;
 extern int h_umode_changed;
 extern int h_new_local_user;
 extern int h_new_remote_user;
@@ -123,10 +124,6 @@ typedef struct
 	struct Channel *chptr;
 	const char *text;
 	int approved;
-	struct {
-		char *mode; //waste here is more efficient elsewhere
-		char *reasoning; // this is what our err is
-	} whynot;
 } hook_data_privmsg_channel;
 
 typedef struct
@@ -136,11 +133,6 @@ typedef struct
 	struct Client *target_p;
 	const char *text;
 	int approved;
-	struct {
-		char *mode; //waste here is more efficient elsewhere
-		char *umode; // this is what our err is
-		char *targnotify; // informed.
-	} whynot;
 } hook_data_privmsg_user;
 
 #endif

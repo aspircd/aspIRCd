@@ -16,8 +16,6 @@
 /* Maximum number of nameservers in /etc/resolv.conf we care about
  * In hybrid, this was 2 -- but in Charybdis, we want to track
  * a few more than that ;) --nenolod
- * While resolv.conf on most OSes only supports 3, this ircd can support
- * up to IRCD_MAXNS, whatever that is.
  */
 #define IRCD_MAXNS 10
 
@@ -25,7 +23,6 @@ struct DNSReply
 {
   char *h_name;
   struct rb_sockaddr_storage addr;
-  char *txt_addr; // in case the reply is T_TXT
 };
 
 struct DNSQuery

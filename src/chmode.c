@@ -87,19 +87,13 @@ construct_cflags_strings(void)
 	*ptr2 = '\0';
 
 	for(i = 0; i < 256; i++)
-	{	// XXX: should we ever care? maybe if we didn't
-		// we could have nice things like one function handling
-		// all op types, or message throttling.
+	{
 		if( !(chmode_table[i].set_func == chm_ban) &&
 			!(chmode_table[i].set_func == chm_forward) &&
 			!(chmode_table[i].set_func == chm_throttle) &&
                         !(chmode_table[i].set_func == chm_key) &&
                         !(chmode_table[i].set_func == chm_limit) &&
-                        !(chmode_table[i].set_func == chm_operbiz) &&
-                        !(chmode_table[i].set_func == chm_manager) &&
-                        !(chmode_table[i].set_func == chm_superop) &&
                         !(chmode_table[i].set_func == chm_op) &&
-                        !(chmode_table[i].set_func == chm_halfop) &&
                         !(chmode_table[i].set_func == chm_voice))
 		{
 			chmode_flags[i] = chmode_table[i].mode_type;
@@ -190,7 +184,7 @@ get_channel_access(struct Client *source_p, struct membership *msptr, int dir)
 	hook_data_channel_approval moduledata;
 
 	if(!MyClient(source_p))
-		return CHFL_MANAGER|CHFL_OPERBIZ;
+		return CHFL_CHANOP;
 
 	if (msptr == NULL)
 		return CHFL_PEON;
@@ -199,7 +193,7 @@ get_channel_access(struct Client *source_p, struct membership *msptr, int dir)
 	moduledata.chptr = msptr->chptr;
 	moduledata.msptr = msptr;
 	moduledata.target = NULL;
-	moduledata.approved = msptr->flags &~ CHFL_VOICE;
+	moduledata.approved = is_chanop(msptr) ? CHFL_CHANOP : CHFL_PEON;
 	moduledata.dir = dir;
 
 	call_hook(h_get_channel_access, &moduledata);
@@ -232,16 +226,10 @@ allow_mode_change(struct Client *source_p, struct Channel *chptr, int alevel,
 		*errors |= SM_ERR_MLOCK;
 		return 0;
 	}
-	int isnohalf = 0;
-	// ONLY_CHANOPS is a chanop
-	// CHFL_HALFOP is a helpop
-	// is the mode a nohalf mode?
-	isnohalf = (strchr(ConfigChannel.halfopscannotuse, c) != NULL);
-
-	if((isnohalf && (alevel & CHFL_HALFOP) && !(alevel & ONLY_CHANOPS)) || (!isnohalf && !(alevel & (CHFL_HALFOP|ONLY_CHANOPS))))
+	if(alevel != CHFL_CHANOP)
 	{
 		if(!(*errors & SM_ERR_NOOPS))
-			sendto_one(source_p, form_str(isnohalf?ERR_CHANOPRIVSNEEDED+3000:ERR_CHANOPRIVSNEEDED),
+			sendto_one(source_p, form_str(ERR_CHANOPRIVSNEEDED),
 				   me.name, source_p->name, chptr->chname);
 		*errors |= SM_ERR_NOOPS;
 		return 0;
@@ -546,7 +534,7 @@ check_forward(struct Client *source_p, struct Channel *chptr,
 		return 0;
 	}
 	/* don't forward to inconsistent target -- jilles */
-	if(!ChannelIsLocal(chptr->chname) && ChannelIsLocal(forward))
+	if(chptr->chname[0] == '#' && forward[0] == '&')
 	{
 		sendto_one_numeric(source_p, ERR_BADCHANNAME,
 				   form_str(ERR_BADCHANNAME), forward);
@@ -561,7 +549,7 @@ check_forward(struct Client *source_p, struct Channel *chptr,
 	if(MyClient(source_p) && !(targptr->mode.mode & MODE_FREETARGET))
 	{
 		if((msptr = find_channel_membership(targptr, source_p)) == NULL ||
-			0 == (get_channel_access(source_p, msptr, MODE_QUERY) & (strchr(ConfigChannel.halfopscannotuse, 'f') != NULL) ? CHFL_CHANOP : CHFL_HALFOP))
+			get_channel_access(source_p, msptr, MODE_QUERY) != CHFL_CHANOP)
 		{
 			sendto_one(source_p, form_str(ERR_CHANOPRIVSNEEDED),
 				   me.name, source_p->name, targptr->chname);
@@ -811,11 +799,6 @@ chm_ban(struct Client *source_p, struct Channel *chptr,
 		break;
 
 	case CHFL_QUIET:
-		/* if +M is disabled, allow all but +M locally */
-		if(!ConfigChannel.use_quiet && MyClient(source_p) &&
-		   (dir == MODE_ADD) && (parc > *parn))
-			return;
-
 		list = &chptr->quietlist;
 		errorval = SM_ERR_RPL_Q;
 		rpl_list_p = form_str(RPL_QUIETLIST);
@@ -836,10 +819,9 @@ chm_ban(struct Client *source_p, struct Channel *chptr,
 
 		/* non-ops cant see +eI lists.. */
 		/* note that this is still permitted if +e/+I are mlocked. */
-		if(
-		    (mode_type == CHFL_EXCEPTION && ((alevel & (strchr(ConfigChannel.halfopscannotuse, 'e') != NULL) ? ONLY_CHANOPS : ONLY_CHANOPS|CHFL_HALFOP) == 0))
-		 || (mode_type == CHFL_INVEX && ((alevel & (strchr(ConfigChannel.halfopscannotuse, 'I') != NULL) ? ONLY_CHANOPS : ONLY_CHANOPS|CHFL_HALFOP) == 0))
-		) {
+		if(alevel != CHFL_CHANOP && mode_type != CHFL_BAN &&
+				mode_type != CHFL_QUIET)
+		{
 			if(!(*errors & SM_ERR_NOOPS))
 				sendto_one(source_p, form_str(ERR_CHANOPRIVSNEEDED),
 					   me.name, source_p->name, chptr->chname);
@@ -999,286 +981,6 @@ chm_ban(struct Client *source_p, struct Channel *chptr,
 	}
 }
 
-int candomodechange (struct Client *source_p, struct Channel *chptr,
-	int alevel, char *raname, int ralevel, int *errors)
-{
-	if((0x0 == (ralevel & alevel)) && (0x0 == (source_p->umodes & user_modes['p'])))
-	{
-		if(!(*errors & SM_ERR_NOOPS))
-		sendto_one(source_p, ":%s 482 %s %s :You're not a channel %s", me.name, source_p->name, chptr->chname, raname);
-		*errors |= SM_ERR_NOOPS;
-		return 0;
-	}
-	return 1;
-}
-
-void
-chm_operbiz(struct Client *source_p, struct Channel *chptr,
-       int alevel, int parc, int *parn,
-       const char **parv, int *errors, int dir, char c, long mode_type)
-{
-	struct membership *mstptr;
-	const char *opnick;
-	struct Client *targ_p;
-
-	if((dir == MODE_QUERY) || (parc <= *parn))
-		return;
-
-	opnick = parv[(*parn)];
-	(*parn)++;
-
-	/* empty nick */
-	if(EmptyString(opnick))
-	{
-		sendto_one_numeric(source_p, ERR_NOSUCHNICK, form_str(ERR_NOSUCHNICK), "*");
-		return;
-	}
-
-	if((targ_p = find_chasing(source_p, opnick, NULL)) == NULL)
-	{
-		return;
-	}
-
-	mstptr = find_channel_membership(chptr, targ_p);
-
-	if(mstptr == NULL)
-	{
-		if(!(*errors & SM_ERR_NOTONCHANNEL) && MyClient(source_p))
-			sendto_one_numeric(source_p, ERR_USERNOTINCHANNEL,
-					   form_str(ERR_USERNOTINCHANNEL), opnick, chptr->chname);
-		*errors |= SM_ERR_NOTONCHANNEL;
-		return;
-	}
-
-	if(!IsOper(targ_p))
-	{
-		if(!(*errors & SM_ERR_NOOPS))
-		sendto_one(source_p, ":%s 482 %s %s :The target user is not a network operator", me.name, source_p->name, chptr->chname);
-		*errors |= SM_ERR_NOOPS;
-		return;
-	}
-
-	if(!IsOper(source_p))
-	{
-		if(!(*errors & SM_ERR_NOOPS))
-		sendto_one(source_p, ":%s 482 %s %s :You're not a network operator", me.name, source_p->name, chptr->chname);
-		*errors |= SM_ERR_NOOPS;
-		return;
-	}
-
-
-	if(MyClient(source_p) && (++mode_limit > MAXMODEPARAMS))
-		return;
-
-	if(dir == MODE_ADD)
-	{
-		if(targ_p == source_p && mstptr->flags & CHFL_OPERBIZ)
-			return;
-
-		mode_changes[mode_count].letter = c;
-		mode_changes[mode_count].dir = MODE_ADD;
-		mode_changes[mode_count].mems = ALL_MEMBERS;
-		mode_changes[mode_count].id = targ_p->id;
-		mode_changes[mode_count++].arg = targ_p->name;
-
-		mstptr->flags |= CHFL_OPERBIZ;
-	}
-	else
-	{
-/*		if(MyClient(source_p) && IsService(targ_p))
-		{
-			sendto_one(source_p, form_str(ERR_ISCHANSERVICE),
-				   me.name, source_p->name, targ_p->name, chptr->chname);
-			return;
-		}*/
-
-		mode_changes[mode_count].letter = c;
-		mode_changes[mode_count].dir = MODE_DEL;
-		mode_changes[mode_count].mems = ALL_MEMBERS;
-		mode_changes[mode_count].id = targ_p->id;
-		mode_changes[mode_count++].arg = targ_p->name;
-
-		mstptr->flags &= ~CHFL_OPERBIZ;
-	}
-
-	if (mstptr->flags & CHFL_DELAY)
-	{ // He's delayed. Undelay him.
-		mstptr->flags &= ~CHFL_DELAY;
-		send_channel_join(0, chptr, targ_p);
-	}
-}
-
-void
-chm_manager(struct Client *source_p, struct Channel *chptr,
-       int alevel, int parc, int *parn,
-       const char **parv, int *errors, int dir, char c, long mode_type)
-{
-	struct membership *mstptr;
-	const char *opnick;
-	struct Client *targ_p;
-
-	if (!candomodechange (source_p, chptr, alevel, "manager", CHFL_MANAGER, errors))
-		return;
-
-	if(!allow_mode_change(source_p, chptr, alevel, errors, c))
-		return;
-
-	if((dir == MODE_QUERY) || (parc <= *parn))
-		return;
-
-	opnick = parv[(*parn)];
-	(*parn)++;
-
-	/* empty nick */
-	if(EmptyString(opnick))
-	{
-		sendto_one_numeric(source_p, ERR_NOSUCHNICK, form_str(ERR_NOSUCHNICK), "*");
-		return;
-	}
-
-	if((targ_p = find_chasing(source_p, opnick, NULL)) == NULL)
-	{
-		return;
-	}
-
-	mstptr = find_channel_membership(chptr, targ_p);
-
-	if(mstptr == NULL)
-	{
-		if(!(*errors & SM_ERR_NOTONCHANNEL) && MyClient(source_p))
-			sendto_one_numeric(source_p, ERR_USERNOTINCHANNEL,
-					   form_str(ERR_USERNOTINCHANNEL), opnick, chptr->chname);
-		*errors |= SM_ERR_NOTONCHANNEL;
-		return;
-	}
-
-	if(MyClient(source_p) && (++mode_limit > MAXMODEPARAMS))
-		return;
-
-	if(dir == MODE_ADD)
-	{
-		if(targ_p == source_p && mstptr->flags & CHFL_MANAGER)
-			return;
-
-		mode_changes[mode_count].letter = c;
-		mode_changes[mode_count].dir = MODE_ADD;
-		mode_changes[mode_count].mems = ALL_MEMBERS;
-		mode_changes[mode_count].id = targ_p->id;
-		mode_changes[mode_count++].arg = targ_p->name;
-
-		mstptr->flags |= CHFL_MANAGER;
-	}
-	else
-	{
-		if(MyClient(source_p) && IsService(targ_p))
-		{
-			sendto_one(source_p, form_str(ERR_ISCHANSERVICE),
-				   me.name, source_p->name, targ_p->name, chptr->chname);
-			return;
-		}
-
-		mode_changes[mode_count].letter = c;
-		mode_changes[mode_count].dir = MODE_DEL;
-		mode_changes[mode_count].mems = ALL_MEMBERS;
-		mode_changes[mode_count].id = targ_p->id;
-		mode_changes[mode_count++].arg = targ_p->name;
-
-		mstptr->flags &= ~CHFL_MANAGER;
-	}
-
-	if (mstptr->flags & CHFL_DELAY)
-	{ // He's delayed. Undelay him.
-		mstptr->flags &= ~CHFL_DELAY;
-		send_channel_join(0, chptr, targ_p);
-	}
-}
-
-
-void
-chm_superop(struct Client *source_p, struct Channel *chptr,
-       int alevel, int parc, int *parn,
-       const char **parv, int *errors, int dir, char c, long mode_type)
-{
-	struct membership *mstptr;
-	const char *opnick;
-	struct Client *targ_p;
-
-	if (!candomodechange (source_p, chptr, alevel, "super-operator", CHFL_SUPEROP|CHFL_MANAGER, errors))
-		return;
-
-	if(!allow_mode_change(source_p, chptr, alevel, errors, c))
-		return;
-
-	if((dir == MODE_QUERY) || (parc <= *parn))
-		return;
-
-	opnick = parv[(*parn)];
-	(*parn)++;
-
-	/* empty nick */
-	if(EmptyString(opnick))
-	{
-		sendto_one_numeric(source_p, ERR_NOSUCHNICK, form_str(ERR_NOSUCHNICK), "*");
-		return;
-	}
-
-	if((targ_p = find_chasing(source_p, opnick, NULL)) == NULL)
-	{
-		return;
-	}
-
-	mstptr = find_channel_membership(chptr, targ_p);
-
-	if(mstptr == NULL)
-	{
-		if(!(*errors & SM_ERR_NOTONCHANNEL) && MyClient(source_p))
-			sendto_one_numeric(source_p, ERR_USERNOTINCHANNEL,
-					   form_str(ERR_USERNOTINCHANNEL), opnick, chptr->chname);
-		*errors |= SM_ERR_NOTONCHANNEL;
-		return;
-	}
-
-	if(MyClient(source_p) && (++mode_limit > MAXMODEPARAMS))
-		return;
-
-	if(dir == MODE_ADD)
-	{
-		if(targ_p == source_p && mstptr->flags & CHFL_SUPEROP)
-			return;
-
-		mode_changes[mode_count].letter = c;
-		mode_changes[mode_count].dir = MODE_ADD;
-		mode_changes[mode_count].mems = ALL_MEMBERS;
-		mode_changes[mode_count].id = targ_p->id;
-		mode_changes[mode_count++].arg = targ_p->name;
-
-		mstptr->flags |= CHFL_SUPEROP;
-	}
-	else
-	{
-		if(MyClient(source_p) && IsService(targ_p))
-		{
-			sendto_one(source_p, form_str(ERR_ISCHANSERVICE),
-				   me.name, source_p->name, targ_p->name, chptr->chname);
-			return;
-		}
-
-		mode_changes[mode_count].letter = c;
-		mode_changes[mode_count].dir = MODE_DEL;
-		mode_changes[mode_count].mems = ALL_MEMBERS;
-		mode_changes[mode_count].id = targ_p->id;
-		mode_changes[mode_count++].arg = targ_p->name;
-
-		mstptr->flags &= ~CHFL_SUPEROP;
-	}
-
-	if (mstptr->flags & CHFL_DELAY)
-	{ // He's delayed. Undelay him.
-		mstptr->flags &= ~CHFL_DELAY;
-		send_channel_join(0, chptr, targ_p);
-	}
-}
-
 void
 chm_op(struct Client *source_p, struct Channel *chptr,
        int alevel, int parc, int *parn,
@@ -1287,9 +989,6 @@ chm_op(struct Client *source_p, struct Channel *chptr,
 	struct membership *mstptr;
 	const char *opnick;
 	struct Client *targ_p;
-
-	if (!candomodechange (source_p, chptr, alevel, "operator", CHFL_CHANOP|CHFL_SUPEROP|CHFL_MANAGER, errors))
-		return;
 
 	if(!allow_mode_change(source_p, chptr, alevel, errors, c))
 		return;
@@ -1356,101 +1055,6 @@ chm_op(struct Client *source_p, struct Channel *chptr,
 
 		mstptr->flags &= ~CHFL_CHANOP;
 	}
-
-	if (mstptr->flags & CHFL_DELAY)
-	{ // He's delayed. Undelay him.
-		mstptr->flags &= ~CHFL_DELAY;
-		send_channel_join(0, chptr, targ_p);
-	}
-}
-
-
-void
-chm_halfop(struct Client *source_p, struct Channel *chptr,
-       int alevel, int parc, int *parn,
-       const char **parv, int *errors, int dir, char c, long mode_type)
-{
-	struct membership *mstptr;
-	const char *opnick;
-	struct Client *targ_p;
-
-// Controversial: allow helpops to make other helpops helpops - solved below
-	if (!candomodechange (source_p, chptr, alevel, "half-operator", CHFL_HALFOP|CHFL_CHANOP|CHFL_SUPEROP|CHFL_MANAGER, errors))
-		return;
-
-// Normally h won't be a nohalfop mode. If let thru by that, but h is a m_d_f_h mode,
-// this will block.
-	if(!allow_mode_change(source_p, chptr, alevel, errors, c))
-		return;
-
-	if((dir == MODE_QUERY) || (parc <= *parn))
-		return;
-
-	opnick = parv[(*parn)];
-	(*parn)++;
-
-	/* empty nick */
-	if(EmptyString(opnick))
-	{
-		sendto_one_numeric(source_p, ERR_NOSUCHNICK, form_str(ERR_NOSUCHNICK), "*");
-		return;
-	}
-
-	if((targ_p = find_chasing(source_p, opnick, NULL)) == NULL)
-	{
-		return;
-	}
-
-	mstptr = find_channel_membership(chptr, targ_p);
-
-	if(mstptr == NULL)
-	{
-		if(!(*errors & SM_ERR_NOTONCHANNEL) && MyClient(source_p))
-			sendto_one_numeric(source_p, ERR_USERNOTINCHANNEL,
-					   form_str(ERR_USERNOTINCHANNEL), opnick, chptr->chname);
-		*errors |= SM_ERR_NOTONCHANNEL;
-		return;
-	}
-
-	if(MyClient(source_p) && (++mode_limit > MAXMODEPARAMS))
-		return;
-
-	if(dir == MODE_ADD)
-	{
-		if(targ_p == source_p && mstptr->flags & CHFL_HALFOP)
-			return;
-
-		mode_changes[mode_count].letter = c;
-		mode_changes[mode_count].dir = MODE_ADD;
-		mode_changes[mode_count].mems = ALL_MEMBERS;
-		mode_changes[mode_count].id = targ_p->id;
-		mode_changes[mode_count++].arg = targ_p->name;
-
-		mstptr->flags |= CHFL_HALFOP;
-	}
-	else
-	{
-		if(MyClient(source_p) && IsService(targ_p))
-		{
-			sendto_one(source_p, form_str(ERR_ISCHANSERVICE),
-				   me.name, source_p->name, targ_p->name, chptr->chname);
-			return;
-		}
-
-		mode_changes[mode_count].letter = c;
-		mode_changes[mode_count].dir = MODE_DEL;
-		mode_changes[mode_count].mems = ALL_MEMBERS;
-		mode_changes[mode_count].id = targ_p->id;
-		mode_changes[mode_count++].arg = targ_p->name;
-
-		mstptr->flags &= ~CHFL_HALFOP;
-	}
-
-	if (mstptr->flags & CHFL_DELAY)
-	{ // He's delayed. Undelay him.
-		mstptr->flags &= ~CHFL_DELAY;
-		send_channel_join(0, chptr, targ_p);
-	}
 }
 
 void
@@ -1516,12 +1120,6 @@ chm_voice(struct Client *source_p, struct Channel *chptr,
 		mode_changes[mode_count++].arg = targ_p->name;
 
 		mstptr->flags &= ~CHFL_VOICE;
-	}
-
-	if (mstptr->flags & CHFL_DELAY)
-	{ // He's delayed. Undelay him.
-		mstptr->flags &= ~CHFL_DELAY;
-		send_channel_join(0, chptr, targ_p);
 	}
 }
 
@@ -1608,16 +1206,16 @@ chm_throttle(struct Client *source_p, struct Channel *chptr,
 
 		(*parn)++;
 
-		chptr->mode.join.num = joins;
-		chptr->mode.join.time = timeslice;
+		chptr->mode.join_num = joins;
+		chptr->mode.join_time = timeslice;
 	}
 	else if(dir == MODE_DEL)
 	{
-		if(!chptr->mode.join.num)
+		if(!chptr->mode.join_num)
 			return;
 
-		chptr->mode.join.num = 0;
-		chptr->mode.join.time = 0;
+		chptr->mode.join_num = 0;
+		chptr->mode.join_time = 0;
 		chptr->join_count = 0;
 		chptr->join_delta = 0;
 
@@ -1846,7 +1444,7 @@ struct ChannelMode chmode_table[256] =
   {chm_nosuch,	0 },			/* A */
   {chm_nosuch,	0 },			/* B */
   {chm_nosuch,  0 },			/* C */
-  {chm_simple,	MODE_CHANDELAY },	/* D */
+  {chm_nosuch,	0 },			/* D */
   {chm_nosuch,	0 },			/* E */
   {chm_simple,	MODE_FREETARGET },	/* F */
   {chm_nosuch,	0 },			/* G */
@@ -1854,19 +1452,19 @@ struct ChannelMode chmode_table[256] =
   {chm_ban,	CHFL_INVEX },           /* I */
   {chm_nosuch,	0 },			/* J */
   {chm_nosuch,	0 },			/* K */
-  {chm_nosuch,	0 },			/* L */
-  {chm_ban,	CHFL_QUIET },		/* M */
+  {chm_staff,	MODE_EXLIMIT },		/* L */
+  {chm_nosuch,	0 },			/* M */
   {chm_nosuch,	0 },			/* N */
   {chm_nosuch,	0 },			/* O */
-  {chm_nosuch,	0 },			/* P */
+  {chm_staff,	MODE_PERMANENT },	/* P */
   {chm_simple,	MODE_DISFORWARD },	/* Q */
-  {chm_simple,	MODE_REGONLY },		/* R */
+  {chm_nosuch,	0 },			/* R */
   {chm_nosuch,	0 },			/* S */
   {chm_nosuch,	0 },			/* T */
   {chm_nosuch,	0 },			/* U */
   {chm_nosuch,	0 },			/* V */
   {chm_nosuch,	0 },			/* W */
-  {chm_staff,	MODE_EXLIMIT },		/* X */
+  {chm_nosuch,	0 },			/* X */
   {chm_nosuch,	0 },			/* Y */
   {chm_nosuch,	0 },			/* Z */
   {chm_nosuch,	0 },
@@ -1875,14 +1473,14 @@ struct ChannelMode chmode_table[256] =
   {chm_nosuch,	0 },
   {chm_nosuch,	0 },
   {chm_nosuch,	0 },
-  {chm_superop,	0 },			/* a */
+  {chm_nosuch,	0 },			/* a */
   {chm_ban,	CHFL_BAN },		/* b */
   {chm_nosuch,	0 },			/* c */
   {chm_nosuch,	0 },			/* d */
   {chm_ban,	CHFL_EXCEPTION },	/* e */
   {chm_forward,	0 },			/* f */
   {chm_simple,	MODE_FREEINVITE },	/* g */
-  {chm_halfop,	0 },			/* h */
+  {chm_nosuch,	0 },			/* h */
   {chm_simple,	MODE_INVITEONLY },	/* i */
   {chm_throttle, 0 },			/* j */
   {chm_key,	0 },			/* k */
@@ -1891,16 +1489,16 @@ struct ChannelMode chmode_table[256] =
   {chm_simple,	MODE_NOPRIVMSGS },	/* n */
   {chm_op,	0 },			/* o */
   {chm_simple,	MODE_PRIVATE },		/* p */
-  {chm_manager,	0 },			/* q */
-  {chm_staff,  MODE_PERMANENT },	/* r */
+  {chm_ban,	CHFL_QUIET },		/* q */
+  {chm_simple,  MODE_REGONLY },		/* r */
   {chm_simple,	MODE_SECRET },		/* s */
   {chm_simple,	MODE_TOPICLIMIT },	/* t */
-  {chm_simple,	MODE_OPMODERATE },	/* u */
+  {chm_nosuch,	0 },			/* u */
   {chm_voice,	0 },			/* v */
   {chm_nosuch,	0 },			/* w */
   {chm_nosuch,	0 },			/* x */
-  {chm_operbiz,	0 },			/* y */
-  {chm_nosuch,	0 },	/* z */
+  {chm_nosuch,	0 },			/* y */
+  {chm_simple,	MODE_OPMODERATE },	/* z */
 
   {chm_nosuch,  0 },			/* 0x7b */
   {chm_nosuch,  0 },			/* 0x7c */
@@ -2229,52 +1827,4 @@ set_channel_mlock(struct Client *client_p, struct Client *source_p,
 			      source_p->id, (long) chptr->channelts, chptr->chname,
 			      chptr->mode_lock ? chptr->mode_lock : "");
 	}
-}
-
-int
-is_better_op(struct membership *source, struct membership *target)
-{
-        if(is_manager(source))
-                return 1;
-        if(is_superop(source) && is_manager(target))
-                return 0;
-        if(is_superop(source) && is_superop(target))
-                return 1;
-        if(is_chanop(source) && is_manager(target))
-                return 0;
-        if(is_chanop(source) && is_superop(target))
-                return 0;
-        if(is_halfop(source) && is_any_op(target))
-                return 0;
-        if(is_halfop(source) && is_halfop(target) && (strchr(ConfigChannel.halfopscannotuse, 'h') != NULL))
-                return 0;
-        if(!is_any_op(source) && !is_halfop(source))
-                return 0;
-
-        return 1;
-}
-
-int
-is_at_least(struct membership *source, int target)
-{
-        if(is_manager(source))
-                return 1;
-        if(is_superop(source) && (target & CHFL_MANAGER) != 0)
-                return 0;
-        if(is_superop(source) && (target & CHFL_SUPEROP) != 0)
-                return 1;
-        if(is_chanop(source) && (target & CHFL_MANAGER) != 0)
-                return 0;
-        if(is_chanop(source) && (target & CHFL_SUPEROP) != 0)
-                return 0;
-        if(is_halfop(source) && (target & ONLY_CHANOPS) != 0)
-                return 0;
-        if(is_halfop(source) && (target & CHFL_HALFOP) != 0 && (strchr(ConfigChannel.halfopscannotuse, 'h') != NULL))
-                return 0;
-        if(!is_any_op(source) && !is_halfop(source) && (target & CHFL_HALFOP) != 0)
-                return 0;
-        if(!is_voiced(source) && !is_any_op(source) && !is_halfop(source) && (target & CHFL_VOICE) != 0)
-                return 0;
-
-        return 1;
 }

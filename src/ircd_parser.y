@@ -1,5 +1,6 @@
 /* This code is in the public domain.
  * $Nightmare: nightmare/src/main/parser.y,v 1.2.2.1.2.1 2002/07/02 03:42:10 ejb Exp $
+ * $Id: ircd_parser.y 871 2006-02-18 21:56:00Z nenolod $
  */
 
 %{
@@ -7,6 +8,7 @@
 #include <sys/stat.h>
 
 #include <netinet/in.h>
+
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -14,8 +16,8 @@
 #define WE_ARE_MEMORY_C
 #include "stdinc.h"
 #include "setup.h"
-#include "ircd_defs.h"
 #include "common.h"
+#include "ircd_defs.h"
 #include "config.h"
 #include "client.h"
 #include "modules.h"
@@ -212,20 +214,7 @@ block_items: block_items block_item
            | block_item
            ;
 
-/* used to have a = */
-block_item:	string itemlist ';'
-		{
-			conf_call_set(conf_cur_block, $1, cur_list);
-			free_cur_list(cur_list);
-			cur_list = NULL;
-		}
-		| string '=' itemlist ';'
-		{
-			conf_call_set(conf_cur_block, $1, cur_list);
-			free_cur_list(cur_list);
-			cur_list = NULL;
-		}
-		| string ':' itemlist ';'
+block_item:	string '=' itemlist ';'
 		{
 			conf_call_set(conf_cur_block, $1, cur_list);
 			free_cur_list(cur_list);
@@ -234,8 +223,6 @@ block_item:	string itemlist ';'
 		;
 
 itemlist: itemlist ',' single
-	| itemlist single
-	| '<' itemlist single '>'
 	| single
 	;
 

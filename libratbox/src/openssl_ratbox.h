@@ -88,6 +88,15 @@
 #endif
 
 
+#if !defined(LIBRESSL_VERSION_NUMBER) && (OPENSSL_VERSION_NUMBER > 0x10101000L)
+#  define LRB_HAVE_TLS_ECDH_X25519      1
+#else
+#  if defined(LIBRESSL_VERSION_NUMBER) && (LIBRESSL_VERSION_NUMBER > 0x2050100fL)
+#    define LRB_HAVE_TLS_ECDH_X25519    1
+#  endif
+#endif
+
+
 
 /*
  * Default supported ciphersuites (if the user does not provide any) and
@@ -123,7 +132,11 @@ static const char rb_default_ciphers[] = ""
 	"!aNULL";
 
 #ifdef LRB_HAVE_TLS_SET_CURVES
+#  ifdef LRB_HAVE_TLS_ECDH_X25519
+static char rb_default_curves[] = "X25519:P-521:P-384:P-256";
+#  else
 static char rb_default_curves[] = "P-521:P-384:P-256";
+#endif
 #endif
 
 #endif /* LRB_OPENSSL_H_INC */

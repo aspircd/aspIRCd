@@ -1,0 +1,69 @@
+MODE <nick> <+|-><modes>
+
+In the O column,
+blank designates that the umode will never be oper only
+O designates that the umode is oper only
+K designates that an extension may disable the umode for opers
+S designates that the umode is services only
+P designates that the umode is permanent (cannot be set OR unset
+  by any party, including services)
+and C designates that the umode might be oper only
+
+M/L = mode letter
+
+M/L | NAME          | O | DESCRIPTION
+----+---------------+---+--------------------------------------------
+ +i | invisible     | K | Designates this client 'invisible'.
+    |               |   | This hides you from people who you
+    |               |   | are not in the same channels as, as
+    |               |   | well as hiding the channels that you
+    |               |   | are in that the other person is not in
+    |               |   | if another person is to whois you.
+ +g | callerid      |   | "caller id" mode - only receive PMs
+    |               |   | from people on your /ACCEPT list
+    |               |   | (see /quote help accept)
+ +w | wallop        |   | Can see oper and server wallops.
+ +o | ircop         | O | Designates this client is an IRC Operator.
+    |               |   | Use the /oper command to attain this.
+ +O | local_oper    | O | Designates this client is a 'helper,'
+    |               |   | an operator with reduced privilege.
+    |               |   | Use the /oper command to attain this.
+ +a | servadmin     | O | Is marked as a server admin in whois.
+ +l | locops        | O | Can see oper locops (local wallops).
+ +s | servnotice    | O | Can see server notices (see /quote
+    |               |   | help snomask).
+ +z | operwall      | O | Can see operwalls.
+ +p | override      | O | Override -- implicit operator access
+    |               |   | in all channels.
+ +N | netadmin      | O | Network administrator - implicit
+    |               |   | operator access in all channels and
+    |               |   | cannot be killed by mortal operators.
+ +h | helpop        | O | Helpop - shows in /stats p and (if
+    |               |   | whois_helpop is loaded) whois that
+    |               |   | the oper is on call
+ +D | deaf          |   | Deaf - ignores all channel messages.
+ +Q | noforward     |   | Prevents you from being affected by
+    |               |   | channel forwarding.
+ +R | regonlymsg    |   | Prevents non-accept unidentified
+    |               |   | users messaging you.
+ +Z | sslclient     | P | Is connected through SSL
+ +A | sctpclient    | P | Is connected through SCTP
+ +M | chanhide      | C | Hide all channels from most users
+    |               |   | (except those who are set umode +P)
+ +I | hideidle      | C | Hides your idle time.
+ +F | hidecert      |   | Hides your SSL certificate
+    |               |   | fingerprint from others.
+ +P | ............. | C | Shows channels you share in WHOIS of all
+    | override_chanhide | users, including +M users.
+ +r | registered    | S | Signifies being registered with services
+ +X | Web client    |   | Signifies that the user is using a
+                    |   | web client.
+ +m | OperOnlyMsg   |   | Prevents non-oper users from messaging
+                    |   | you (generally, who are -Oo)
+ +W | Whois_Notifier|   | This allows you to show up notices when
+                    |   | someone /whois'es you.
+ +t | SSL Only Msg  |   | Prevents the users who are connected via non-ssl
+                    |   | ports to the network from messaging you.
+ +B | Adds as a Bot |   | Shows a string "is a Bot on this server."
+                    |   | usually to mark you as a BOT.
+

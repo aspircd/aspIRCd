@@ -1,0 +1,7 @@
+Forcequit: new module in aspIRCd. It work over remote servers.
+It allows IRC Operators to forcefully disconnect a user from the network.
+
+-SYNTAX- /forcepart (user's nickname)
+    [ without the brackets ]
+  where, 'user's nickname' to be the current nickname of the connected user
+  you want to disconnect.

@@ -1,0 +1,8 @@
+Forcepart: New module in aspIRCd which provides eccentric features.
+It works, over remote servers. It adds the ability for IRC Opers to forcefully
+make the user part a channel
+
+-SYNTAX- /forcepart (user's nickname) (#channel)
+   [ without the brackets ]
+ where, 'user's nickname' being the nickname of the user, which is being used.
+ and '#channel' to be the name of the channel you want the user to part.

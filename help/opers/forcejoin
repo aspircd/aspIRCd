@@ -1,0 +1,9 @@
+Forcejoin: new module in aspIRCd.
+allows IRC Operators to forcefully join a user to a channel.
+It works over remote servers adding more functionality.
+
+ -SYNTAX- /forcejoin (user's nickname) (#channel)
+     [ without the brackets ]
+  where, 'user's nickname' to be te current nickname of the user.
+  and, '#channel' to be the name of the channel you want user to join. 
+

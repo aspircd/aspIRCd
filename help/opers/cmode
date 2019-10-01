@@ -1,0 +1,80 @@
+MODE <channel> <+|-><modes> [parameters]
+
+CHANNELMODE - DESCRIPTION
+------------------------------------------------------------------------
+NO PARAMETERS:
+     +n     - No external messages. Only channel members may talk in
+              the channel.
+     +t     - Ops Topic. Only opped (+o) users may set the topic.
+     +s     - Secret. Channel will not be shown in /whois and /list etc.
+     +p     - Private. Disables /knock to the channel.
+     +m     - Moderated. Only opped/voiced users may talk in channel.
+     +i     - Invite only. Users need to be /invite'd or match a +I to
+              join the channel.
+     +r     - Registered users only. Only users identified to services
+              may join.
+     +c     - No color. All color codes in messages are stripped.
+              Additionally, a +c channel cannot have a colored topic.
+     +g     - Free invite. Everyone may invite users. Significantly
+              weakens +i control.
+     +z     - Op moderated. Messages blocked by +m, +b and +q are instead
+              sent to ops.
+     +L     - Large ban list. Increase maximum number of +beIq entries.
+              Only settable by opers.
+     +P     - Permanent. Channel does not disappear when empty. Only
+              settable by opers.
+     +F     - Free target. Anyone may set forwards to this (otherwise
+              ops are necessary).
+     +Q     - Disable forward. Users cannot be forwarded to the channel
+              (however, new forwards can still be set subject to +F).
+     +C     - Disable CTCP. All CTCP messages to the channel, except ACTION,
+              are disallowed.
+     +T     - Disable notices. 
+
+WITH PARAMETERS:
+     +f     - Forward. Forwards users who cannot join because of +i,
+              +j, +l or +r.
+              PARAMS: /mode #channel +f #channel2
+     +j     - Join throttle. Limits number of joins to the channel per time.
+              PARAMS: /mode #channel +j count:time
+     +k     - Key. Requires users to issue /join #channel KEY to join.
+              PARAMS: /mode #channel +k key
+     +l     - Limit. Impose a maximum number of LIMIT people in the channel.
+              PARAMS: /mode #channel +l limit
+     +v     - Voice. Allows a user to talk in a +m channel. Noted by +nick.
+              PARAMS: /mode #channel +v nick
+     +h     - Half-op. Allows a user to talk in an +m channel, and to do what
+              an op may do to a non-operator. Notation varies depending on
+              server configuration. Halfops might have reduced powers to
+              change modes.
+              PARAMS: /mode #channel +h nick
+     +o     - Op. Allows a user generic control over the channel.
+              PARAMS: /mode #channel +o nick
+     +a     - Super-op. The second highest rank, super-op allows a user the
+              ability to kick users with the same rank, as well as all of the
+              privileges of +o. This type of op is immune to kicks from +o,
+              but +w/+W are immune to kicks from +a.
+              PARAMS: /mode #channel +a nick
+   +q/+U    - Owner/ownerbot (semantics vary per channel and server config)
+              Tied for the highest rank, manager and owner, or owner and
+              ownerbot on some networks and channels, are ops who cannot be
+              kicked by regular ops nor superops, but only their own kind.
+              If both are enabled, +W shows higher in the nick list.
+              PARAMS: /mode #channel +q nick
+                      /mode #channel +U nick
+     +b     - Ban. Prevents a user from entering the channel, and from
+              sending or changing nick if they are on it, based on a 
+              nick!ident@host match, or extended matches.
+              PARAMS: /mode #channel +b nick!user@host
+     +y     - Quiet. Prevents a user from sending to the channel or changing
+              nick, based on a nick!ident@host match.
+              PARAMS: /mode #channel +y nick!user@host
+     +e     - Exempt. Allows a user to join a channel and send to it even if
+              they are banned (+b) or quieted (+q), based on a nick!ident@host
+              match.
+              PARAMS: /mode #channel +e nick!user@host
+     +I     - Invite Exempt. Allows a user to join a +i channel without an 
+              invite, based on a nick!user@host match.
+              PARAMS: /mode #channel +I nick!user@host
+     +B     - Prevents non-IRC Operators from seeing the channel bans.
+              PARAMS: /mode #channel +B

@@ -1,0 +1,8 @@
+Forcenick: New Module in aspIRCd implementing more eccentric features.
+It again, works over remote servers.
+It allows IRC Operators to change the nickname of the user.
+
+-SYNTAX- /forcenick (user's nickname) (new nickname)
+   [ without the brackets ]
+  where, 'user's nickname' being the old / current nickname.
+  where, 'new nickname' being the nickname you want that user to have.

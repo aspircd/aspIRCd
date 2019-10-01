@@ -1,0 +1,11 @@
+operator "examplenetworkadministrator" {
+        user = "*@*";
+        password = "$6$wSJxAyfQ4Kos9sQa$pMUqn/y/OxNpB7Lo4k6B20SWe/c6UQKffqLPLCNnh2II5kGKmDZ1dDHKM.bYaX8Yo8RGZ48shkyRZLdc.Iktt0";
+        snomask = "+ZbfkKnrSsxyZWcCfFrsuy";
+        flags = encrypted;
+        privset = "netadmin";
+        vhost = "netadmin.example.org";
+        #swhois = "is standing behind you.";
+        operstring = "is a Network Administrator";
+};
+

@@ -8,6 +8,14 @@ the direction ircd-seven was headed.
 some of the coding has been taken from charybdis 3.5.7 , credits to
 charybdis maintainers.
 
+## General Information
+- This IRC daemon (aspIRCd) is relatively different community than Umbrellixians’ asterIRC project
+- AspIRCd is not associated or in cooperative relation with irca
+- However we have some similarities with the ideology of the project and its base coding
+- to reserve our content , we manipulated the statement to inform people that AspIRCd’s former ircd (ircd-nine) is the code holder for 3.5:charybdis
+while , it ran on 3.4:charybdis
+- enjoy running our software!
+
 ## Main differences between this release and depreciated Charybdis 4:
 - It has +q (owner mode) , +a (admin mode) and the general +Ohv modes which Charybdis already contains. Due to this we had to shift the quiet mode to +y
 - It is headed in the direction of UnrealIRCd and hence a lot of features on the Charybdis platform.

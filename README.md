@@ -36,31 +36,31 @@ Debian packages:
  - `libsqlite3-dev`
  - `libtool`
  - `autoconf`
+ - `python` - 2.7 or earlier
  
  You however have a choice of choosing any of your favourite SSL supporting applications. One of them, we primarily support is one of that of OpenSSL.
  To make sure SSL ports works, issue a certificate to your IRC Network by going in the `main directory@/bin` and running:
  `./genssl.sh`
+ 
+ ## Debian/ubuntu Users
+
+If you have a newly installed OS, you should primarily run `apt-get update` followed by `apt-get install libssl-dev flex bison build-essential libsqlite3-dev pkg-config autoconf openssl libtool`
+
+Read the included documentation for detailed compilation and install
+directions.
  
  ## Installation
  
  This is a quick setup guide. In order to install, fork this repository : `git clone https://github.com/baconcoders/aspIRCd.git`
  
 * Then `cd aspIRCd`
-* then to build the configuration file: `./autogen.sh`
 * then use `libtoolize --ltdl` to link all the modules
 
-* then to run the configure script, this will ask you simple questions important for your IRC setup, run `./Config`
+* then to run the configure script, this will ask you simple questions important for your IRC setup, run `./Config` - this will automatically run autogen.sh for generating configure file
 * to build the IRCd run `make`
 * followed by `make install`
 
 **your IRCd will be installed in `/HOME DIRECTORY/ircd` by default.**
-
-## Debian/ubuntu Users
-
-If you have a newly installed OS, you should primarily run `apt-get update` followed by `apt-get install libssl-dev flex bison build-essential libsqlite3-dev pkg-config autoconf openssl libtool`
-
-Read the included documentation for detailed compilation and install
-directions.
 
 ## Support
 Interested in meeting the developers?

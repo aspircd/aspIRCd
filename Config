@@ -113,6 +113,8 @@ print("")
 print("")
 print("")
 raw_input("Press enter to install AspIRCd...")
+import subprocess
+subprocess.call("bin/autogen.sh")
 
 
 

@@ -134,6 +134,8 @@ print("\nThat should be it for now. Running %s" % " ".join(configflags))
 print("")
 print("")
 print("")
+system("clear")
+print(art)
 raw_input("Press enter to make Configuration file for AspIRCd...")
 import subprocess
 subprocess.call("./autogen.sh")

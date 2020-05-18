@@ -172,7 +172,7 @@ restart_ssld(void)
 	start_ssldaemon(ServerInfo.ssld_count, ServerInfo.ssl_cert, ServerInfo.ssl_private_key, ServerInfo.ssl_dh_params, ServerInfo.ssl_cipher_list);
 }
 
-static void
+void
 ssl_killall(void)
 {
 	rb_dlink_node *ptr, *next;

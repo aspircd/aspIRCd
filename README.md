@@ -54,11 +54,8 @@ directions.
  This is a quick setup guide. In order to install, fork this repository : `git clone https://github.com/baconcoders/aspIRCd.git`
  
 * Then `cd aspIRCd`
-* then use `libtoolize --ltdl` to link all the modules
 
-* then to run the configure script, this will ask you simple questions important for your IRC setup, run `./Config` - this will automatically run autogen.sh for generating configure file
-* to build the IRCd run `make`
-* followed by `make install`
+* then to run the configure script, this will ask you simple questions important for your IRC setup, run `./Setup` - this script will automatically configure, and build AspIRCd.
 
 **your IRCd will be installed in `/HOME DIRECTORY/ircd` by default.**
 

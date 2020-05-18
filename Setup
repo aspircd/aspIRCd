@@ -16,39 +16,23 @@ art = """
                               v5.2.0
 """
 welcome2 ="""
----------------------------------------------------------------------------------------------------------------
-                          Welcome to the AspIRCd Installation Setup for Linux
----------------------------------------------------------------------------------------------------------------
-
+---------------------------------------------------------------------------------
+              Welcome to the AspIRCd Installation Setup for Linux
+---------------------------------------------------------------------------------
 CURRENT BUILD: v5.2.0
 BUILD ALIAS: ASPIRCD MEGA
 RELEASED - Sep 20, 2019
 
----------------------------------------------------------------------------------------------------------------
-                            COPYRIGHT (C) 2019 - 2020 ALL RIGHTS RESERVED - SYZOLIN
----------------------------------------------------------------------------------------------------------------
-
+---------------------------------------------------------------------------------
+              COPYRIGHT (C) 2019 - 2020 ALL RIGHTS RESERVED - SYZOLIN
+---------------------------------------------------------------------------------
 This installation script is automated and will install all the dependencies required for Building AspIRCd.
 This installation script will install, configure and build AspIRCd for you.
-
----------------------------------------------------------------------------------------------------------------
-WARNING!
-Make sure the user has SUDO privileges so that AspIRCd can install everything on its own.
----------------------------------------------------------------------------------------------------------------
-
-
----------------------------------------------------------------------------------------------------------------
-SUGGESTIONS!
----------------------------------------------------------------------------------------------------------------
-It is recommended to install SCREEN and run this script using it to avoid any setup errors while you
-disconnect from your shell due to internet problems.
-
----------------------------------------------------------------------------------------------------------------
 """
 print(art)
 print(welcome2)
 import subprocess
-subprocess.call("./dependecies.sh")
+subprocess.call("./dependencies.sh")
 
 
 from os import system
@@ -159,28 +143,10 @@ system(" ".join(configflags))
 system("clear")
 
 print(art)
+print ("Configuration done! Now, building AspIRCd!")
+import subprocess
+subprocess.call("./build.sh")
 
-print("""
-================================================================================================
-================================================================================================
-Next, run make and make install. Then copy %s/ircd/etc/example.conf to
-%s/ircd/etc/ircd.conf and read through the example configuration completely to make
-sure your install is tailored to your needs. After that, run %s/ircd/bin/ircd
-and start to connect clients and servers as you need.
-
-If you have any problems, please check the documentation in the doc/ folder
-of the source repository. If problems persist please stop by #aspIRCd
-on irc.aspircd.com and ask.
-================================================================================================
-================================================================================================
-                     ALL RIGHTS RESERVED   Copyright (C) 2018-2019
-================================================================================================
-================================================================================================
-                            AspIRCd IRC Daemon Software
-                     For support let us know and contact us at
-                             syzolin@aspircd.com
-================================================================================================
-================================================================================================
 """ %\
     (installloc2, installloc2, installloc2))
 

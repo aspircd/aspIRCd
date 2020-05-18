@@ -6,6 +6,8 @@ Copyright 2015-2018 Craig Saunders <root@chatfreedom.us>
 Copyright 2018-2019 David Franklin <syzolin@aspircd.com>
 This software is under GPL.
 """
+import subprocess
+subprocess.call("./autogen.sh")
 
 from os import system
 import os
@@ -113,9 +115,6 @@ print("")
 print("")
 print("")
 raw_input("Press enter to install AspIRCd...")
-import subprocess
-subprocess.call("./autogen.sh")
-
 
 
 system(" ".join(configflags))

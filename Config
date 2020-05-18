@@ -6,6 +6,50 @@ Copyright 2015-2018 Craig Saunders <root@chatfreedom.us>
 Copyright 2018-2019 David Franklin <syzolin@aspircd.com>
 This software is under GPL.
 """
+art = """
+                ___ ____   ____    _
+  __ _ ___ _ __|_ _|  _ \ / ___|__| |
+ / _` / __| '_ \| || |_) | |   / _` |
+| (_| \__ \ |_) | ||  _ <| |__| (_| |
+ \__,_|___/ .__/___|_| \_\\____\__,_|
+          |_|
+                              v5.2.0
+"""
+welcome2 ="""
+---------------------------------------------------------------------------------------------------------------
+                          Welcome to the AspIRCd Installation Setup for Linux
+---------------------------------------------------------------------------------------------------------------
+
+CURRENT BUILD: v5.2.0
+BUILD ALIAS: ASPIRCD MEGA
+RELEASED - Sep 20, 2019
+
+---------------------------------------------------------------------------------------------------------------
+                            COPYRIGHT (C) 2019 - 2020 ALL RIGHTS RESERVED - SYZOLIN
+---------------------------------------------------------------------------------------------------------------
+
+This installation script is automated and will install all the dependencies required for Building AspIRCd.
+This installation script will install, configure and build AspIRCd for you.
+
+---------------------------------------------------------------------------------------------------------------
+WARNING!
+Make sure the user has SUDO privileges so that AspIRCd can install everything on its own.
+---------------------------------------------------------------------------------------------------------------
+
+
+---------------------------------------------------------------------------------------------------------------
+SUGGESTIONS!
+---------------------------------------------------------------------------------------------------------------
+It is recommended to install SCREEN and run this script using it to avoid any setup errors while you
+disconnect from your shell due to internet problems.
+
+---------------------------------------------------------------------------------------------------------------
+"""
+print(art)
+print(welcome2)
+import subprocess
+subprocess.call("./dependecies.sh")
+
 
 from os import system
 import os
@@ -26,19 +70,12 @@ def promptYesNo(prompt, default=True):
 
 configflags = ["./configure"]
 
-art = """
-                ___ ____   ____    _
-  __ _ ___ _ __|_ _|  _ \ / ___|__| |
- / _` / __| '_ \| || |_) | |   / _` |
-| (_| \__ \ |_) | ||  _ <| |__| (_| |
- \__,_|___/ .__/___|_| \_\\____\__,_|
-          |_|
-                              v5.2.0
-"""
-
 welcome ="""
-Welcome to the AspIRCd Configuration script. This script will help you choose the
-best compile flags for your installation of AspIRCd, whilst install is restricted to /home/<username>/ircd
+
+---------------------------------------------------------------------------------------------------------------
+ASPIRCD SETUP
+---------------------------------------------------------------------------------------------------------------
+CONFIGURATIONS:
 """
 
 print(art)

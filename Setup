@@ -31,6 +31,7 @@ This installation script will install, configure and build AspIRCd for you.
 """
 print(art)
 print(welcome2)
+raw_input("Press enter to configure AspIRCd....")
 import subprocess
 subprocess.call("./dependencies.sh")
 
@@ -133,7 +134,7 @@ print("\nThat should be it for now. Running %s" % " ".join(configflags))
 print("")
 print("")
 print("")
-raw_input("Press enter to install AspIRCd...")
+raw_input("Press enter to make Configuration file for AspIRCd...")
 import subprocess
 subprocess.call("./autogen.sh")
 
@@ -143,11 +144,8 @@ system(" ".join(configflags))
 system("clear")
 
 print(art)
-print ("Configuration done! Now, building AspIRCd!")
+raw_input("Configured! Press enter to build AspIRCd.")
 import subprocess
 subprocess.call("./build.sh")
-
-""" %\
-    (installloc2, installloc2, installloc2))
 
 # vim: set ts=4 sw=4 tw=0 et

@@ -149,5 +149,11 @@ print(art)
 raw_input("Configured! Press enter to build AspIRCd.")
 import subprocess
 subprocess.call("./build.sh")
+system("clear")
+print(art)
+
+raw_input("Press enter to configure SSL Certificates for AspIRCd....")
+import subprocess
+subprocess.call("./sslcert.sh")
 
 # vim: set ts=4 sw=4 tw=0 et

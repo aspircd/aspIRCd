@@ -1,12 +1,28 @@
-## aspIRCd
+## AspIRCd
 
-**aspIRCd** is a high performance, IRCv3.2 capable, and scalable
+**AspIRCd** is a high performance, IRCv3.2 capable, and scalable
 IRC daemon. It is a fork of the now-defunct ircd-seven and seeks to continue in
 the direction ircd-seven was headed.
 
-**charybdis**
-some of the coding has been taken from charybdis 3.5.7 , credits to
-charybdis maintainers.
+## Credits and Ex-Information
+1. *Charybdis*
+Aparently, the ircd-seven code was transformed to the charybdis's 3.5 base. (@charybdis-ircd)
+
+2. IRCa
+Some of the code has been taken from IRCa (@asterIRC)
+
+*Ex-Information*
+This IRCd heads in the version UnrealIRCd (3.2.x branch) was headed and continues to be in the same direction
+to provide the now removed features in the latest 4.0+ Releases.
+
+## What are we doing now?
+**AspIRCd** Development Team is currently working on transforming the current un-modern (5.2) release to work on the C++ based code base with
+modern features keeping the current features same as such heading towards (UnrealIRCd's 3.2.x features) Unreal's 4th Generation code base.
+
+You may contact us at:-
+vagbox@outlook.com
+AspIRCd Team,
+Subsidiary, VAG Ltd.
 
 ## General Information
 - This IRC daemon (aspIRCd) is relatively different community than Umbrellixians’ asterIRC project
@@ -44,14 +60,14 @@ Debian packages:
  
  ## Debian/ubuntu Users
 
-If you have a newly installed OS, you should primarily run `apt-get update` followed by `apt-get install libssl-dev flex bison build-essential libsqlite3-dev pkg-config autoconf openssl libtool`
+If you have a newly installed OS, you should primarily run `apt-get update` followed by `apt-get install libssl-dev flex python3 python bison build-essential libsqlite3-dev pkg-config autoconf openssl libtool`
 
 Read the included documentation for detailed compilation and install
 directions.
  
  ## Installation
  
- This is a quick setup guide. In order to install, fork this repository : `git clone https://github.com/baconcoders/aspIRCd.git`
+ This is a quick setup guide. In order to install, fork this repository : `git clone https://github.com/aspircd/aspIRCd.git`
  
 * Then `cd aspIRCd`
 

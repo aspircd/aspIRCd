@@ -3,6 +3,8 @@
 **AspIRCd** is a high performance, IRCv3.2 capable, and scalable
 IRC daemon. It is a fork of charybdis's 3.5 branch.
 
+This repository has been archived and this marks the **last commit** of this repository, We are currently working on a new project. Follow us for more.
+
 ## Credits and Ex-Information
 1. *Charybdis*
 Aparently, the ircd-seven code was transformed to the charybdis's 3.5 base. (@charybdis-ircd)

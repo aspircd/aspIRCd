@@ -1,10 +1,13 @@
-## AspIRCd
+## AspIRCd (Deprecated)
 
-
+## The Project has been moved.
+Follow us on https://github.com/raccoon-ircd/raccoon
+This repository has been archived and is not maintained anymore. We do not recommend you to use this IRC daemon, as a fork of this repository can be found in at the
+Reference link mentioned above.
+Cheers
 
 **AspIRCd** is a high performance, IRCv3.2 capable, and scalable
 IRC daemon. It is a fork of charybdis's 3.5 branch.
-
 
 ## Credits and Ex-Information
 1. *Charybdis*
